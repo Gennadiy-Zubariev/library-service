@@ -1,4 +1,6 @@
-from .base import *
+import os
+
+from .base import *  # noqa: F401, F403
 
 DEBUG = True
 
@@ -11,6 +13,6 @@ DATABASES = {
         "USER": os.getenv("POSTGRES_USER", "library_user"),
         "PASSWORD": os.getenv("POSTGRES_PASSWORD", "library_password"),
         "HOST": os.getenv("POSTGRES_HOST", "localhost"),
-        "PORT": os.getenv("POSTGRES_PORT", "5432")
+        "PORT": os.getenv("POSTGRES_PORT", "5432"),
     }
 }
