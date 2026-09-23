@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     # Apps
+    "users",
 ]
 
 MIDDLEWARE = [
@@ -131,3 +132,5 @@ SIMPLE_JWT = {
     # ↑ Це змінює хедер з "Authorization" на "Authorize" (вимога ТЗ)
     # У запитах відправлятимеш: Authorize: Bearer <token>
 }
+
+AUTH_USER_MODEL = "users.User"
