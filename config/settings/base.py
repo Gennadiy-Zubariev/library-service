@@ -30,8 +30,10 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Third_party
     "rest_framework",
+    "rest_framework_simplejwt",
     "drf_spectacular",
     # Apps
+    "users",
 ]
 
 MIDDLEWARE = [
@@ -131,3 +133,5 @@ SIMPLE_JWT = {
     # ↑ Це змінює хедер з "Authorization" на "Authorize" (вимога ТЗ)
     # У запитах відправлятимеш: Authorize: Bearer <token>
 }
+
+AUTH_USER_MODEL = "users.User"
