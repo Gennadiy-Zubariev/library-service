@@ -11,7 +11,6 @@ class UserRegisterView(generics.CreateAPIView):
 class UserMeView(generics.RetrieveUpdateAPIView):
     serializer_class = UserDetailSerializer
     permission_classes = (permissions.IsAuthenticated,)
-    http_method_names = ("get", "patch")
 
     def get_object(self):
         return self.request.user

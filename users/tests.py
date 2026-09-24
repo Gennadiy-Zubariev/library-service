@@ -108,6 +108,20 @@ class UserMeTest(TestCase):
         self.user.refresh_from_db()
         self.assertEqual(result.data["first_name"], self.user.first_name)
 
+    def test_me_put(self):
+        result = self.client.put(
+            ME_URL,
+            {
+                "email": self.user.email,
+                "first_name": "updated",
+                "last_name": "updated_last_name",
+            },
+        )
+        self.assertEqual(result.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertEqual(result.data["first_name"], self.user.first_name)
+        self.assertEqual(result.data["last_name"], self.user.last_name)
+
     def test_me_unauthorized(self):
         client = APIClient()
         result = client.get(ME_URL)
