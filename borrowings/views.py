@@ -45,7 +45,7 @@ class BorrowingViewSet(
 
     def perform_create(self, serializer):
         borrowing = serializer.save(user=self.request.user)
-        send_telegram_message(
+        send_telegram_message.delay(
             f"📚 *New Borrowing*\n"
             f"Book: {borrowing.book.title}\n"
             f"User: {borrowing.user.email}\n"

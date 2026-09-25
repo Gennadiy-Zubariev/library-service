@@ -7,6 +7,11 @@ from notifications.telegram import send_telegram_message
 
 
 @shared_task
+def send_telegram_notification(text):
+    send_telegram_message(text)
+
+
+@shared_task
 def check_overdue_borrowings():
     overdue = Borrowing.objects.filter(
         expected_return_date__lte=date.today(), actual_return_date__isnull=True
