@@ -37,3 +37,26 @@ class BorrowingCreateSerializer(serializers.ModelSerializer):
         book.inventory -= 1
         book.save()
         return super().create(validated_data)
+
+
+class BorrowingReturnSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Borrowing
+        fields = ("id", "actual_return_date")
+        read_only_fields = ("id", "actual_return_date")
+
+    def validate(self, attrs):
+        if self.instance.actual_return_date is not None:
+            raise serializers.ValidationError(
+                "This borrowing has already been returned."
+            )
+        return attrs
+
+    def save(self, **kwargs):
+        from django.utils import timezone
+
+        self.instance.actual_return_date = timezone.now().date()
+        self.instance.book.inventory += 1
+        self.instance.book.save()
+        self.instance.save()
+        return self.instance
