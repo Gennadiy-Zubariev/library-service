@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     "users",
     "books",
     "borrowings",
+    "notifications",
 ]
 
 MIDDLEWARE = [
@@ -137,3 +138,7 @@ SIMPLE_JWT = {
 }
 
 AUTH_USER_MODEL = "users.User"
+
+# Telegram
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
