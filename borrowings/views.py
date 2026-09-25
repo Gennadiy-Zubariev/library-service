@@ -9,6 +9,7 @@ from borrowings.serializers import (
     BorrowingReadSerializer,
     BorrowingReturnSerializer,
 )
+from notifications.telegram import send_telegram_message
 
 
 class BorrowingViewSet(
@@ -43,7 +44,14 @@ class BorrowingViewSet(
         return BorrowingReadSerializer
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        borrowing = serializer.save(user=self.request.user)
+        send_telegram_message(
+            f"📚 *New Borrowing*\n"
+            f"Book: {borrowing.book.title}\n"
+            f"User: {borrowing.user.email}\n"
+            f"Borrow date: {borrowing.borrow_date}\n"
+            f"Expected return: {borrowing.expected_return_date}"
+        )
 
     @action(
         detail=True,
