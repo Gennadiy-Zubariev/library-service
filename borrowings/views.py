@@ -51,6 +51,7 @@ class BorrowingViewSet(
             "POST",
         ],
         url_path="return",
+        url_name="return",
     )
     def return_borrowing(self, request, pk=None):
         borrowing = self.get_object()
