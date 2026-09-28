@@ -1,7 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import Navbar from "./components/Navbar";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import BooksPage from "./pages/BooksPage";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -13,13 +15,12 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 }
 
 function HomePage() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   return (
     <div style={{ padding: 20 }}>
-      <h1>Library Service</h1>
-      <p>Welcome, {user?.first_name}!</p>
-      <button onClick={logout}>Logout</button>
+      <h1>Welcome, {user?.first_name}!</h1>
+      <p>Use the navigation above to browse books and manage your borrowings.</p>
     </div>
   );
 }
@@ -28,9 +29,11 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <Navbar />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/books" element={<BooksPage />} />
           <Route
             path="/"
             element={
