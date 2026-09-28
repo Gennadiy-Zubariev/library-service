@@ -1,4 +1,5 @@
 from django.db import transaction
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -14,6 +15,24 @@ from notifications.tasks import send_telegram_notification
 from payments.strip_helper import create_fine_session, create_stripe_session
 
 
+@extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="is_active",
+                type=str,
+                description="Filter by active borrowings (not returned yet). Use 'true'.",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="user_id",
+                type=int,
+                description="Filter by user ID (admin only).",
+                required=False,
+            ),
+        ]
+    ),
+)
 class BorrowingViewSet(
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
@@ -57,6 +76,10 @@ class BorrowingViewSet(
             f"Expected return: {borrowing.expected_return_date}"
         )
 
+    @extend_schema(
+        request=BorrowingReturnSerializer,
+        responses=BorrowingReadSerializer,
+    )
     @action(
         detail=True,
         methods=[

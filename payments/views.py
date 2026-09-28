@@ -1,5 +1,6 @@
 import stripe
-from rest_framework import mixins, status, viewsets
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -26,6 +27,34 @@ class PaymentViewSet(
 class PaymentSuccessView(APIView):
     permission_classes = (IsAuthenticated,)
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="session_id",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Stripe Checkout session ID",
+                required=True,
+            ),
+        ],
+        responses={
+            200: inline_serializer(
+                name="PaymentSuccessResponse",
+                fields={
+                    "message": serializers.CharField(),
+                    "payment": PaymentSerializer(),
+                },
+            ),
+            400: inline_serializer(
+                name="PaymentErrorResponse",
+                fields={"error": serializers.CharField()},
+            ),
+            404: inline_serializer(
+                name="PaymentNotFoundResponse",
+                fields={"error": serializers.CharField()},
+            ),
+        },
+    )
     def get(self, request):
         session_id = request.query_params.get("session_id")
         if not session_id:
@@ -65,6 +94,14 @@ class PaymentSuccessView(APIView):
 class PaymentCancelView(APIView):
     permission_classes = (IsAuthenticated,)
 
+    @extend_schema(
+        responses={
+            200: inline_serializer(
+                name="PaymentCancelResponse",
+                fields={"message": serializers.CharField()},
+            ),
+        },
+    )
     def get(self, request):
         return Response(
             {
