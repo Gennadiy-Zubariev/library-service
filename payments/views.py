@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from notifications.tasks import send_telegram_notification
 from payments.models import Payment
 from payments.serializers import PaymentSerializer
 
@@ -70,7 +71,9 @@ class PaymentSuccessView(APIView):
             )
 
         try:
-            payment = Payment.objects.get(session_id=session_id)
+            payment = Payment.objects.select_related(
+                "borrowing__user", "borrowing__book"
+            ).get(session_id=session_id)
         except Payment.DoesNotExist:
             return Response(
                 {"error": "Payment not found"}, status=status.HTTP_404_NOT_FOUND
@@ -79,6 +82,13 @@ class PaymentSuccessView(APIView):
         if session.payment_status == "paid":
             payment.status = Payment.Status.PAID
             payment.save()
+            send_telegram_notification.delay(
+                f"💰 *Payment Successful*\n"
+                f"Type: {payment.type}\n"
+                f"Amount: ${payment.money_to_pay}\n"
+                f"User: {payment.borrowing.user.email}\n"
+                f"Book: {payment.borrowing.book.title}"
+            )
             return Response(
                 {
                     "message": "Payment successful",
@@ -87,7 +97,7 @@ class PaymentSuccessView(APIView):
                 status=status.HTTP_200_OK,
             )
         return Response(
-            {"message": "Payment not complated yet"}, status=status.HTTP_200_OK
+            {"message": "Payment not completed yet"}, status=status.HTTP_200_OK
         )
 
 
