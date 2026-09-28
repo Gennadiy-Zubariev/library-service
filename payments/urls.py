@@ -9,7 +9,7 @@ router = DefaultRouter()
 router.register("", PaymentViewSet, basename="payment")
 
 urlpatterns = [
-    path("", include(router.urls)),
     path("success/", PaymentSuccessView.as_view(), name="payment-success"),
     path("cancel/", PaymentCancelView.as_view(), name="payment-cancel"),
+    path("", include(router.urls)),
 ]

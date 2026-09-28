@@ -11,7 +11,7 @@ from borrowings.serializers import (
     BorrowingReturnSerializer,
 )
 from notifications.tasks import send_telegram_notification
-from payments.strip_helper import create_stripe_session
+from payments.strip_helper import create_fine_session, create_stripe_session
 
 
 class BorrowingViewSet(
@@ -41,7 +41,7 @@ class BorrowingViewSet(
     def get_serializer_class(self):
         if self.action == "create":
             return BorrowingCreateSerializer
-        if self.action == "return":
+        if self.action == "return_borrowing":
             return BorrowingReturnSerializer
         return BorrowingReadSerializer
 
@@ -69,6 +69,9 @@ class BorrowingViewSet(
         borrowing = self.get_object()
         serializer = self.get_serializer(borrowing)
         serializer.save()
+
+        if borrowing.actual_return_date > borrowing.expected_return_date:
+            create_fine_session(borrowing, request)
         return Response(
             BorrowingReadSerializer(borrowing).data, status=status.HTTP_200_OK
         )
