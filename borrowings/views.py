@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -9,7 +10,8 @@ from borrowings.serializers import (
     BorrowingReadSerializer,
     BorrowingReturnSerializer,
 )
-from notifications.telegram import send_telegram_message
+from notifications.tasks import send_telegram_notification
+from payments.strip_helper import create_stripe_session
 
 
 class BorrowingViewSet(
@@ -44,8 +46,10 @@ class BorrowingViewSet(
         return BorrowingReadSerializer
 
     def perform_create(self, serializer):
-        borrowing = serializer.save(user=self.request.user)
-        send_telegram_message.delay(
+        with transaction.atomic():
+            borrowing = serializer.save(user=self.request.user)
+            create_stripe_session(borrowing, self.request)
+        send_telegram_notification.delay(
             f"📚 *New Borrowing*\n"
             f"Book: {borrowing.book.title}\n"
             f"User: {borrowing.user.email}\n"
