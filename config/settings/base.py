@@ -155,3 +155,6 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=9, minute=0),
     },
 }
+
+# Stripe
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
