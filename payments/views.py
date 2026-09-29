@@ -80,15 +80,21 @@ class PaymentSuccessView(APIView):
             )
 
         if session.payment_status == "paid":
+            # Atomic PENDING -> PAID switch: only the request that actually
+            # changes the status sends the notification (the endpoint can be
+            # hit several times, e.g. React StrictMode or a page refresh).
+            switched = Payment.objects.filter(
+                pk=payment.pk, status=Payment.Status.PENDING
+            ).update(status=Payment.Status.PAID)
             payment.status = Payment.Status.PAID
-            payment.save()
-            send_telegram_notification.delay(
-                f"💰 *Payment Successful*\n"
-                f"Type: {payment.type}\n"
-                f"Amount: ${payment.money_to_pay}\n"
-                f"User: {payment.borrowing.user.email}\n"
-                f"Book: {payment.borrowing.book.title}"
-            )
+            if switched:
+                send_telegram_notification.delay(
+                    f"💰 *Payment Successful*\n"
+                    f"Type: {payment.type}\n"
+                    f"Amount: ${payment.money_to_pay}\n"
+                    f"User: {payment.borrowing.user.email}\n"
+                    f"Book: {payment.borrowing.book.title}"
+                )
             return Response(
                 {
                     "message": "Payment successful",
