@@ -45,9 +45,11 @@ export default function BorrowingsPage() {
         {user?.is_staff && (
           <input
             type="number"
+            min={1}
+            step={1}
             placeholder="Filter by User ID"
             value={userId}
-            onChange={(e) => setUserId(e.target.value)}
+            onChange={(e) => setUserId(e.target.value.replace(/\D/g, ""))}
             className="input !w-auto"
           />
         )}
