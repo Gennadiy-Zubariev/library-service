@@ -12,7 +12,7 @@ from borrowings.serializers import (
     BorrowingReturnSerializer,
 )
 from notifications.tasks import send_telegram_notification
-from payments.strip_helper import create_fine_session, create_stripe_session
+from payments.stripe_helper import create_fine_session, create_stripe_session
 
 
 @extend_schema_view(
