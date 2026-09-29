@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { getBooks } from "../api/services";
 import { useAuth } from "../context/AuthContext";
@@ -11,6 +11,7 @@ export default function BooksPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const pageSize = useRef(0);
 
   useEffect(() => {
     const fetchBooks = async () => {
@@ -18,7 +19,9 @@ export default function BooksPage() {
       try {
         const { data } = await getBooks(page);
         setBooks(data.results);
-        setTotalPages(Math.ceil(data.count / 10));
+        // Page size comes from the API (first page length), not a hardcoded number.
+        if (page === 1) pageSize.current = data.next ? data.results.length : data.count;
+        setTotalPages(Math.max(1, Math.ceil(data.count / (pageSize.current || 1))));
       } catch (err) {
         console.error("Failed to fetch books", err);
       } finally {
