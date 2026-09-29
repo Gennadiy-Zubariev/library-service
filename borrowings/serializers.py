@@ -46,6 +46,7 @@ class BorrowingCreateSerializer(serializers.ModelSerializer):
                 "You cannot borrow books with pending payments. "
                 "Please complete your outstanding payments first."
             )
+        return attrs
 
     def create(self, validated_data):
         book = validated_data["book"]

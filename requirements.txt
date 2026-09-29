@@ -63,3 +63,4 @@ virtualenv==21.11.0
 wcwidth==0.9.1
 stripe==11.4.1
 coverage==7.6.10
+pillow==12.3.0

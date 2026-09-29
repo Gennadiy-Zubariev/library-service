@@ -10,7 +10,17 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 FINE_MULTIPLIER = Decimal("2")
 
 
+def _get_frontend_url(request):
+    """In dev frontend runs on port 5173, in prod same origin."""
+    host = request.get_host()
+    if ":8000" in host:
+        host = host.replace(":8000", ":5173")
+    scheme = "https" if request.is_secure() else "http"
+    return f"{scheme}://{host}"
+
+
 def create_stripe_session(borrowing, request):
+    frontend_url = _get_frontend_url(request)
     days = (borrowing.expected_return_date - borrowing.borrow_date).days
     total_price = borrowing.book.daily_fee * days
     amount_in_cents = int(total_price * 100)
@@ -30,9 +40,8 @@ def create_stripe_session(borrowing, request):
             }
         ],
         mode="payment",
-        success_url=request.build_absolute_uri("/api/payments/success/")
-        + "?session_id={CHECKOUT_SESSION_ID}",
-        cancel_url=request.build_absolute_uri("api/payments/cancel"),
+        success_url=frontend_url + "/payments/success?session_id={CHECKOUT_SESSION_ID}",
+        cancel_url=frontend_url + "/payments/cancel",
     )
 
     Payment.objects.create(
@@ -46,6 +55,7 @@ def create_stripe_session(borrowing, request):
 
 
 def create_fine_session(borrowing, request):
+    frontend_url = _get_frontend_url(request)
     days_overdue = (borrowing.actual_return_date - borrowing.expected_return_date).days
     fine_amount = borrowing.book.daily_fee * days_overdue * FINE_MULTIPLIER
     amount_in_cents = int(fine_amount * 100)
@@ -65,9 +75,8 @@ def create_fine_session(borrowing, request):
             }
         ],
         mode="payment",
-        success_url=request.build_absolute_uri("/api/payments/success/")
-        + "?session_id={CHECKOUT_SESSION_ID}",
-        cancel_url=request.build_absolute_uri("/api/payments/cancel/"),
+        success_url=frontend_url + "/payments/success?session_id={CHECKOUT_SESSION_ID}",
+        cancel_url=frontend_url + "/payments/cancel",
     )
 
     Payment.objects.create(
