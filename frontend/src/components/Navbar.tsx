@@ -21,9 +21,14 @@ export default function Navbar() {
           Books
         </Link>
         {user && (
-          <Link to="/borrowings" style={{ color: "white", textDecoration: "none" }}>
-            My Borrowings
-          </Link>
+          <>
+            <Link to="/borrowings" style={{ color: "white", textDecoration: "none" }}>
+              My Borrowings
+            </Link>
+            <Link to="/profile" style={{ color: "white", textDecoration: "none" }}>
+              Profile
+            </Link>
+          </>
         )}
       </div>
       <div style={{ display: "flex", gap: 16, alignItems: "center" }}>

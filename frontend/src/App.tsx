@@ -9,6 +9,7 @@ import CreateBorrowingPage from "./pages/CreateBorrowingPage";
 import BorrowingDetailPage from "./pages/BorrowingDetailPage";
 import PaymentSuccessPage from "./pages/PaymentSuccessPage";
 import PaymentCancelPage from "./pages/PaymentCancelPage";
+import ProfilePage from "./pages/ProfilePage";
 
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -85,6 +86,14 @@ function App() {
             element={
               <PrivateRoute>
                 <PaymentCancelPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <PrivateRoute>
+                <ProfilePage />
               </PrivateRoute>
             }
           />
