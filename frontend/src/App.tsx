@@ -10,6 +10,8 @@ import BorrowingDetailPage from "./pages/BorrowingDetailPage";
 import PaymentSuccessPage from "./pages/PaymentSuccessPage";
 import PaymentCancelPage from "./pages/PaymentCancelPage";
 import ProfilePage from "./pages/ProfilePage";
+import BookDetailPage from "./pages/BookDetailPage";
+import CreateBookPage from "./pages/CreateBookPage";
 
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -97,6 +99,10 @@ function App() {
               </PrivateRoute>
             }
           />
+          <Route path="/books/create" element={
+            <PrivateRoute><CreateBookPage /></PrivateRoute>
+          } />
+          <Route path="/books/:id" element={<BookDetailPage />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

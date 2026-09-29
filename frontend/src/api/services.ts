@@ -48,3 +48,17 @@ export const returnBorrowing = (id: number) =>
 // Payments
 export const getPayments = (page = 1) =>
   api.get<PaginatedResponse<Payment>>(`/payments/?page=${page}`);
+
+// Books (admin)
+export const createBook = (data: {
+  title: string;
+  author: string;
+  cover: string;
+  inventory: number;
+  daily_fee: string;
+}) => api.post<Book>("/books/", data);
+
+export const updateBook = (id: number, data: Partial<Book>) =>
+  api.put<Book>(`/books/${id}/`, data);
+
+export const deleteBook = (id: number) => api.delete(`/books/${id}/`);
