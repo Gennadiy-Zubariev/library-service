@@ -30,18 +30,14 @@ export default function BorrowingsPage() {
     fetchBorrowings();
   }, [isActive, userId, user?.is_staff]);
 
-  if (loading) return <div style={{ padding: 20 }}>Loading...</div>;
+  if (loading) return <div className="page text-muted">Loading...</div>;
 
   return (
-    <div style={{ padding: 20 }}>
-      <h1>My Borrowings</h1>
+    <div className="page">
+      <h1 className="mb-6 font-serif text-3xl font-bold text-primary dark:text-blue-400">My Borrowings</h1>
 
-      <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
-        <select
-          value={isActive}
-          onChange={(e) => setIsActive(e.target.value)}
-          style={{ padding: 8 }}
-        >
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <select value={isActive} onChange={(e) => setIsActive(e.target.value)} className="input !w-auto">
           <option value="">All</option>
           <option value="true">Active only</option>
         </select>
@@ -52,50 +48,50 @@ export default function BorrowingsPage() {
             placeholder="Filter by User ID"
             value={userId}
             onChange={(e) => setUserId(e.target.value)}
-            style={{ padding: 8 }}
+            className="input !w-auto"
           />
         )}
 
-        <Link to="/borrowings/create">
-          <button style={{ padding: "8px 16px" }}>+ New Borrowing</button>
-        </Link>
+        <Link to="/borrowings/create" className="btn ml-auto">+ New Borrowing</Link>
       </div>
 
       {borrowings.length === 0 ? (
-        <p>No borrowings found.</p>
+        <p className="text-muted">No borrowings found.</p>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ borderBottom: "2px solid #333", textAlign: "left" }}>
-              <th style={{ padding: 8 }}>ID</th>
-              <th style={{ padding: 8 }}>Book</th>
-              <th style={{ padding: 8 }}>Borrow Date</th>
-              <th style={{ padding: 8 }}>Expected Return</th>
-              <th style={{ padding: 8 }}>Status</th>
-              <th style={{ padding: 8 }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {borrowings.map((b) => (
-              <tr key={b.id} style={{ borderBottom: "1px solid #ddd" }}>
-                <td style={{ padding: 8 }}>{b.id}</td>
-                <td style={{ padding: 8 }}>{b.book.title}</td>
-                <td style={{ padding: 8 }}>{b.borrow_date}</td>
-                <td style={{ padding: 8 }}>{b.expected_return_date}</td>
-                <td style={{ padding: 8 }}>
-                  {b.actual_return_date ? (
-                    <span style={{ color: "green" }}>Returned {b.actual_return_date}</span>
-                  ) : (
-                    <span style={{ color: "orange" }}>Active</span>
-                  )}
-                </td>
-                <td style={{ padding: 8 }}>
-                  <Link to={`/borrowings/${b.id}`}>Details</Link>
-                </td>
+        <div className="card overflow-x-auto">
+          <table className="w-full">
+            <thead className="border-b border-line dark:border-slate-700">
+              <tr>
+                <th className="th">ID</th>
+                <th className="th">Book</th>
+                <th className="th">Borrow Date</th>
+                <th className="th">Expected Return</th>
+                <th className="th">Status</th>
+                <th className="th">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {borrowings.map((b) => (
+                <tr key={b.id} className="border-b border-line transition last:border-0 hover:bg-primary-lighter/40 dark:border-slate-700 dark:hover:bg-slate-700/50">
+                  <td className="td">{b.id}</td>
+                  <td className="td font-medium">{b.book.title}</td>
+                  <td className="td">{b.borrow_date}</td>
+                  <td className="td">{b.expected_return_date}</td>
+                  <td className="td">
+                    {b.actual_return_date ? (
+                      <span className="badge badge-green">● Returned {b.actual_return_date}</span>
+                    ) : (
+                      <span className="badge badge-orange">● Active</span>
+                    )}
+                  </td>
+                  <td className="td">
+                    <Link to={`/borrowings/${b.id}`} className="font-semibold text-primary hover:underline dark:text-blue-400">Details</Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

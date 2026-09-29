@@ -40,106 +40,110 @@ export default function BorrowingDetailPage() {
     }
   };
 
-  if (loading) return <div style={{ padding: 20 }}>Loading...</div>;
-  if (error) return <div style={{ padding: 20, color: "red" }}>{error}</div>;
+  if (loading) return <div className="page text-muted">Loading...</div>;
+  if (error) return <div className="page text-red-600">{error}</div>;
   if (!borrowing) return null;
 
   return (
-    <div style={{ padding: 20, maxWidth: 600 }}>
-      <h1>Borrowing #{borrowing.id}</h1>
+    <div className="page">
+      <h1 className="mb-6 font-serif text-3xl font-bold text-primary dark:text-blue-400">Borrowing #{borrowing.id}</h1>
 
-      <div style={{ marginBottom: 20 }}>
-        <h3>Book Info</h3>
-        <p>Title: {borrowing.book.title}</p>
-        <p>Author: {borrowing.book.author}</p>
-        <p>Cover: {borrowing.book.cover}</p>
-        <p>Daily Fee: ${borrowing.book.daily_fee}</p>
+      <div className="grid gap-5 md:grid-cols-2">
+        <div className="card p-6">
+          <h3 className="mb-3 font-serif text-xl font-bold">Book Info</h3>
+          <dl>
+            <div className="flex justify-between border-b border-line py-2.5 last:border-0 dark:border-slate-700">
+              <dt className="text-sm text-muted">Title</dt>
+              <dd className="font-medium">{borrowing.book.title}</dd>
+            </div>
+            <div className="flex justify-between border-b border-line py-2.5 last:border-0 dark:border-slate-700">
+              <dt className="text-sm text-muted">Author</dt>
+              <dd className="font-medium">{borrowing.book.author}</dd>
+            </div>
+            <div className="flex justify-between border-b border-line py-2.5 last:border-0 dark:border-slate-700">
+              <dt className="text-sm text-muted">Cover</dt>
+              <dd className="font-medium">{borrowing.book.cover}</dd>
+            </div>
+            <div className="flex justify-between border-b border-line py-2.5 last:border-0 dark:border-slate-700">
+              <dt className="text-sm text-muted">Daily Fee</dt>
+              <dd className="font-medium">${borrowing.book.daily_fee}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div className="card p-6">
+          <h3 className="mb-3 font-serif text-xl font-bold">Borrowing Info</h3>
+          <dl>
+            <div className="flex justify-between border-b border-line py-2.5 last:border-0 dark:border-slate-700">
+              <dt className="text-sm text-muted">Borrow Date</dt>
+              <dd className="font-medium">{borrowing.borrow_date}</dd>
+            </div>
+            <div className="flex justify-between border-b border-line py-2.5 last:border-0 dark:border-slate-700">
+              <dt className="text-sm text-muted">Expected Return</dt>
+              <dd className="font-medium">{borrowing.expected_return_date}</dd>
+            </div>
+            <div className="flex justify-between border-b border-line py-2.5 last:border-0 dark:border-slate-700">
+              <dt className="text-sm text-muted">Actual Return</dt>
+              <dd className="font-medium">{borrowing.actual_return_date ? (
+                <span className="badge badge-green">● {borrowing.actual_return_date}</span>
+              ) : (
+                <span className="badge badge-orange">● Not returned yet</span>
+              )}</dd>
+            </div>
+          </dl>
+        </div>
       </div>
 
-      <div style={{ marginBottom: 20 }}>
-        <h3>Borrowing Info</h3>
-        <p>Borrow Date: {borrowing.borrow_date}</p>
-        <p>Expected Return: {borrowing.expected_return_date}</p>
-        <p>
-          Actual Return:{" "}
-          {borrowing.actual_return_date ? (
-            <span style={{ color: "green" }}>{borrowing.actual_return_date}</span>
-          ) : (
-            <span style={{ color: "orange" }}>Not returned yet</span>
+      {!borrowing.actual_return_date && (
+        <div className="mt-5">
+          {borrowing.payments.some((p) => p.status === "PENDING") && (
+            <p className="mb-4 rounded-control border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-medium text-orange-600 dark:border-orange-900 dark:bg-orange-950">
+              ⚠️ You have unpaid payments for this borrowing
+            </p>
           )}
-        </p>
-      </div>
-
-        {!borrowing.actual_return_date && (
-          <div>
-            {borrowing.payments.some((p) => p.status === "PENDING") && (
-              <p style={{ color: "orange", marginBottom: 8 }}>
-                ⚠️ You have unpaid payments for this borrowing
-              </p>
-            )}
-            <button
-              onClick={handleReturn}
-              style={{
-                padding: "8px 24px",
-                backgroundColor: "#4CAF50",
-                color: "white",
-                border: "none",
-                cursor: "pointer",
-                marginBottom: 20,
-              }}
-            >
-              Return Book
-            </button>
-          </div>
-        )}
-
-      {borrowing.payments.length > 0 && (
-        <div>
-          <h3>Payments</h3>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ borderBottom: "2px solid #333", textAlign: "left" }}>
-                <th style={{ padding: 8 }}>Type</th>
-                <th style={{ padding: 8 }}>Amount</th>
-                <th style={{ padding: 8 }}>Status</th>
-                <th style={{ padding: 8 }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {borrowing.payments.map((p) => (
-                <tr key={p.id} style={{ borderBottom: "1px solid #ddd" }}>
-                  <td style={{ padding: 8 }}>{p.type}</td>
-                  <td style={{ padding: 8 }}>${p.money_to_pay}</td>
-                  <td style={{ padding: 8 }}>
-                    <span style={{ color: p.status === "PAID" ? "green" : "orange" }}>
-                      {p.status}
-                    </span>
-                  </td>
-                  <td style={{ padding: 8 }}>
-                    {p.status === "PENDING" &&
-                      <a
-                        href={p.session_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: "blue" }}
-                      >
-                        Pay Now
-                      </a>
-                    }
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <button onClick={handleReturn} className="btn-green cursor-pointer">Return Book</button>
         </div>
       )}
 
-      <button
-        onClick={() => navigate("/borrowings")}
-        style={{ marginTop: 16, padding: "8px 16px" }}
-      >
-        ← Back to Borrowings
-      </button>
+      {borrowing.payments.length > 0 && (
+        <div className="mt-8">
+          <h3 className="mb-3 font-serif text-xl font-bold">Payments</h3>
+          <div className="card overflow-x-auto">
+            <table className="w-full">
+              <thead className="border-b border-line dark:border-slate-700">
+                <tr>
+                  <th className="th">Type</th>
+                  <th className="th">Amount</th>
+                  <th className="th">Status</th>
+                  <th className="th">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {borrowing.payments.map((p) => (
+                  <tr key={p.id} className="border-b border-line transition last:border-0 hover:bg-primary-lighter/40 dark:border-slate-700 dark:hover:bg-slate-700/50">
+                    <td className="td">{p.type}</td>
+                    <td className="td">${p.money_to_pay}</td>
+                    <td className="td">
+                      <span className={`badge ${p.status === "PAID" ? "badge-green" : "badge-orange"}`}>
+                        ● {p.status}
+                      </span>
+                    </td>
+                    <td className="td">
+                      {p.status === "PENDING" && (
+                        <a href={p.session_url} target="_blank" rel="noopener noreferrer" className="btn !px-3 !py-1.5">
+                          Pay Now
+                        </a>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <button onClick={() => navigate("/borrowings")} className="btn-outline mt-6">← Back to Borrowings</button>
     </div>
   );
 }

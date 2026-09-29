@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-serif: "Playfair Display", Georgia, serif;
+  --color-primary: #1e40af;
+  --color-primary-light: #3b82f6;
+  --color-primary-lighter: #dbeafe;
+  --color-page: #f0f4f8;
+  --color-ink: #1e293b;
+  --color-muted: #64748b;
+  --color-line: #e2e8f0;
+  --radius-card: 16px;
+  --radius-control: 10px;
+}
+
+@layer base {
+  /* Site background: drop an image at frontend/public/bg.jpg (or change the URL) */
+  body {
+    @apply bg-page font-sans text-ink antialiased;
+    background-image:
+      linear-gradient(to bottom, rgb(240 244 248 / 0.25), rgb(240 244 248 / 0.4)),
+      url("/bg.jpg");
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+  }
+  @media (prefers-color-scheme: dark) {
+    body {
+      @apply bg-slate-900 text-slate-100;
+      background-image:
+        linear-gradient(to bottom, rgb(15 23 42 / 0.5), rgb(15 23 42 / 0.65)),
+        url("/bg.jpg");
+    }
+  }
+}
+
+@keyframes spin3d {
+  from { transform: rotateY(0deg); }
+  to { transform: rotateY(360deg); }
+}
+
+@layer components {
+
+  .card { @apply rounded-card border border-line bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800; }
+  .input { @apply w-full rounded-control border border-line bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-primary-light focus:ring-4 focus:ring-primary-light/20 dark:border-slate-600 dark:bg-slate-900; }
+  .label { @apply mb-1.5 block text-sm font-medium text-muted dark:text-slate-400; }
+  .btn { @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-control bg-gradient-to-r from-blue-900 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:shadow-lg hover:brightness-110 disabled:opacity-60; }
+  .btn-green { @apply rounded-control bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 hover:shadow-lg; }
+  .btn-danger { @apply cursor-pointer rounded-control bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700; }
+  .btn-outline { @apply cursor-pointer rounded-control border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-primary-lighter dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700; }
+  .badge { @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold; }
+  .badge-green { @apply bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400; }
+  .badge-orange { @apply bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-400; }
+  .badge-red { @apply bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400; }
+  .page { @apply mx-auto max-w-6xl px-4 py-8; }
+  .auth-wrap { @apply flex min-h-[calc(100vh-64px)] items-center justify-center px-4 py-10; }
+  .th { @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted; }
+  .td { @apply px-4 py-3 text-sm; }
+}

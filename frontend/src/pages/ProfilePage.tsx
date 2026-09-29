@@ -1,6 +1,7 @@
-import { useState, FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axiosInstance";
+import BookIcon from "../components/BookIcon";
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -26,37 +27,28 @@ export default function ProfilePage() {
   };
 
   return (
-    <div style={{ maxWidth: 400, margin: "40px auto" }}>
-      <h1>My Profile</h1>
-      <p style={{ color: "#666", marginBottom: 20 }}>
-        Email: {user?.email}
-        {user?.is_staff && <span style={{ color: "#ffd700" }}> (Admin)</span>}
-      </p>
-      {message && <p style={{ color: "green" }}>{message}</p>}
-      {error && <p style={{ color: "red" }}>{error}</p>}
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: 12 }}>
-          <label>First Name</label>
-          <br />
-          <input
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            style={{ width: "100%", padding: 8 }}
-          />
-        </div>
-        <div style={{ marginBottom: 12 }}>
-          <label>Last Name</label>
-          <br />
-          <input
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            style={{ width: "100%", padding: 8 }}
-          />
-        </div>
-        <button type="submit" style={{ padding: "8px 24px" }}>
-          Save
-        </button>
-      </form>
+    <div className="auth-wrap">
+      <div className="card w-full max-w-md p-8">
+        <div className="mb-4 flex justify-center text-primary dark:text-blue-400"><BookIcon size={44} /></div>
+        <h1 className="mb-2 text-center font-serif text-3xl font-bold text-primary dark:text-blue-400">My Profile</h1>
+        <p className="mb-6 text-center text-sm text-muted">
+          {user?.email}
+          {user?.is_staff && <span className="ml-2 rounded-full bg-primary-lighter px-2.5 py-0.5 text-xs font-bold text-primary">Admin</span>}
+        </p>
+        {message && <p className="mb-4 rounded-control bg-green-50 px-3 py-2 text-sm text-green-600">{message}</p>}
+        {error && <p className="mb-4 rounded-control bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="label">First Name</label>
+            <input value={firstName} onChange={(e) => setFirstName(e.target.value)} className="input" />
+          </div>
+          <div>
+            <label className="label">Last Name</label>
+            <input value={lastName} onChange={(e) => setLastName(e.target.value)} className="input" />
+          </div>
+          <button type="submit" className="btn w-full">Save</button>
+        </form>
+      </div>
     </div>
   );
 }

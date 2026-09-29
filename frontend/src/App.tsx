@@ -12,26 +12,16 @@ import PaymentCancelPage from "./pages/PaymentCancelPage";
 import ProfilePage from "./pages/ProfilePage";
 import BookDetailPage from "./pages/BookDetailPage";
 import CreateBookPage from "./pages/CreateBookPage";
+import HomePage from "./pages/HomePage";
 
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div className="page text-muted">Loading...</div>;
   if (!user) return <Navigate to="/login" />;
 
   return <>{children}</>;
-}
-
-function HomePage() {
-  const { user } = useAuth();
-
-  return (
-    <div style={{ padding: 20 }}>
-      <h1>Welcome, {user?.first_name}!</h1>
-      <p>Use the navigation above to browse books and manage your borrowings.</p>
-    </div>
-  );
 }
 
 function App() {

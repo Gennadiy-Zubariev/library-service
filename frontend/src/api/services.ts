@@ -50,15 +50,18 @@ export const getPayments = (page = 1) =>
   api.get<PaginatedResponse<Payment>>(`/payments/?page=${page}`);
 
 // Books (admin)
-export const createBook = (data: {
-  title: string;
-  author: string;
-  cover: string;
-  inventory: number;
-  daily_fee: string;
-}) => api.post<Book>("/books/", data);
+// Book payloads are sent as FormData so an image file can be uploaded.
+export const createBook = (data: FormData) => api.post<Book>("/books/", data);
 
-export const updateBook = (id: number, data: Partial<Book>) =>
+export const updateBook = (id: number, data: FormData) =>
   api.put<Book>(`/books/${id}/`, data);
 
 export const deleteBook = (id: number) => api.delete(`/books/${id}/`);
+
+// Stats
+export const getStats = () =>
+  api.get<{
+    books_available: number;
+    active_readers: number;
+    borrowings_total: number;
+  }>("/stats/");

@@ -5,6 +5,7 @@ export interface Book {
   cover: "HARD" | "SOFT";
   inventory: number;
   daily_fee: string;
+  image: string | null;
 }
 
 export interface User {

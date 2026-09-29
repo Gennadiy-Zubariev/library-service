@@ -1,11 +1,13 @@
-import { useEffect, useState, FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState, type FormEvent } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { getBooks, createBorrowing } from "../api/services";
 import type { Book } from "../types";
+import BookIcon from "../components/BookIcon";
 
 export default function CreateBorrowingPage() {
   const [books, setBooks] = useState<Book[]>([]);
-  const [selectedBook, setSelectedBook] = useState("");
+  const [searchParams] = useSearchParams();
+  const [selectedBook, setSelectedBook] = useState(searchParams.get("book") ?? "");
   const [returnDate, setReturnDate] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -51,46 +53,33 @@ export default function CreateBorrowingPage() {
   tomorrow.setDate(tomorrow.getDate() + 1);
   const minDate = tomorrow.toISOString().split("T")[0];
 
-  if (loading) return <div style={{ padding: 20 }}>Loading...</div>;
+  if (loading) return <div className="page text-muted">Loading...</div>;
 
   return (
-    <div style={{ maxWidth: 500, margin: "40px auto" }}>
-      <h1>New Borrowing</h1>
-      {error && <p style={{ color: "red" }}>{error}</p>}
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: 12 }}>
-          <label>Book</label>
-          <br />
-          <select
-            value={selectedBook}
-            onChange={(e) => setSelectedBook(e.target.value)}
-            required
-            style={{ width: "100%", padding: 8 }}
-          >
-            <option value="">Select a book</option>
-            {books.map((book) => (
-              <option key={book.id} value={book.id}>
-                {book.title} — {book.author} (${book.daily_fee}/day, {book.inventory} available)
-              </option>
-            ))}
-          </select>
-        </div>
-        <div style={{ marginBottom: 12 }}>
-          <label>Expected Return Date</label>
-          <br />
-          <input
-            type="date"
-            value={returnDate}
-            onChange={(e) => setReturnDate(e.target.value)}
-            min={minDate}
-            required
-            style={{ width: "100%", padding: 8 }}
-          />
-        </div>
-        <button type="submit" style={{ padding: "8px 24px" }}>
-          Borrow
-        </button>
-      </form>
+    <div className="auth-wrap">
+      <div className="card w-full max-w-lg p-8">
+        <div className="mb-4 flex justify-center text-primary dark:text-blue-400"><BookIcon size={44} /></div>
+        <h1 className="mb-6 text-center font-serif text-3xl font-bold text-primary dark:text-blue-400">New Borrowing</h1>
+        {error && <p className="mb-4 rounded-control bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="label">Book</label>
+            <select value={selectedBook} onChange={(e) => setSelectedBook(e.target.value)} required className="input">
+              <option value="">Select a book</option>
+              {books.map((book) => (
+                <option key={book.id} value={book.id}>
+                  {book.title} — {book.author} (${book.daily_fee}/day, {book.inventory} available)
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Expected Return Date</label>
+            <input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} min={minDate} required className="input" />
+          </div>
+          <button type="submit" className="btn w-full">Borrow</button>
+        </form>
+      </div>
     </div>
   );
 }

@@ -28,20 +28,22 @@ export default function PaymentSuccessPage() {
   }, [searchParams]);
 
   return (
-    <div style={{ padding: 20, maxWidth: 500, margin: "80px auto", textAlign: "center" }}>
-      {error ? (
-        <div>
-          <h1 style={{ color: "red" }}>Error</h1>
-          <p>{error}</p>
-        </div>
-      ) : (
-        <div>
-          <h1 style={{ color: "green" }}>✅ {message}</h1>
-        </div>
-      )}
-      <Link to="/borrowings" style={{ marginTop: 20, display: "inline-block" }}>
-        ← Back to Borrowings
-      </Link>
+    <div className="auth-wrap">
+      <div className="card w-full max-w-md p-10 text-center">
+        {error ? (
+          <>
+            <div className="text-6xl">❌</div>
+            <h1 className="mt-4 font-serif text-3xl font-bold text-red-600">Error</h1>
+            <p className="mt-2 text-muted">{error}</p>
+          </>
+        ) : (
+          <>
+            <div className="text-6xl">✅</div>
+            <h1 className="mt-4 font-serif text-3xl font-bold text-green-600">{message}</h1>
+          </>
+        )}
+        <Link to="/borrowings" className="btn mt-6">← Back to Borrowings</Link>
+      </div>
     </div>
   );
 }
