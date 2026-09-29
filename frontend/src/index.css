@@ -42,8 +42,8 @@
 
 @layer components {
 
-  .card { @apply rounded-card border border-line bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800; }
-  .input { @apply w-full rounded-control border border-line bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-primary-light focus:ring-4 focus:ring-primary-light/20 dark:border-slate-600 dark:bg-slate-900; }
+  .card { @apply rounded-card border border-line bg-white/40 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-800/40; }
+  .input { @apply w-full rounded-control border border-line bg-white/30 px-3.5 py-2.5 text-sm outline-none transition focus:border-primary-light focus:bg-white/90 focus:ring-4 focus:ring-primary-light/20 dark:border-slate-600 dark:bg-slate-900/30 dark:focus:bg-slate-900/90; }
   .label { @apply mb-1.5 block text-sm font-medium text-muted dark:text-slate-400; }
   .btn { @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-control bg-gradient-to-r from-blue-900 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:shadow-lg hover:brightness-110 disabled:opacity-60; }
   .btn-green { @apply rounded-control bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 hover:shadow-lg; }

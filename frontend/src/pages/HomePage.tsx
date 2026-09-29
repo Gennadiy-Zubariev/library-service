@@ -44,7 +44,7 @@ export default function HomePage() {
         <h1 className="font-serif text-4xl font-extrabold text-primary sm:text-[52px] dark:text-blue-400">
           Your Digital Library
         </h1>
-        <p className="mx-auto mt-4 max-w-xl text-muted dark:text-slate-400">
+        <p className="mx-auto mt-4 max-w-xl font-medium text-slate-800 dark:text-slate-200">
           Welcome{user?.first_name ? `, ${user.first_name}` : ""}! Browse the collection,
           borrow your next read and manage payments in one place.
         </p>
