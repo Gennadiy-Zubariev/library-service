@@ -5,7 +5,7 @@ import type { User } from "../types";
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (access: string, refresh: string) => void;
+  login: (access: string, refresh: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -37,10 +37,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const login = (access: string, refresh: string) => {
+  const login = async (access: string, refresh: string) => {
     localStorage.setItem("access_token", access);
     localStorage.setItem("refresh_token", refresh);
-    fetchUser();
+    await fetchUser();
   };
 
   const logout = () => {
