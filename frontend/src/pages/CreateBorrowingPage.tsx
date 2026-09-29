@@ -16,8 +16,16 @@ export default function CreateBorrowingPage() {
   useEffect(() => {
     const fetchBooks = async () => {
       try {
-        const { data } = await getBooks();
-        setBooks(data.results.filter((b) => b.inventory > 0));
+        // The API is paginated: load every page so any book can be selected.
+        const all: Book[] = [];
+        let page = 1;
+        while (true) {
+          const { data } = await getBooks(page);
+          all.push(...data.results);
+          if (!data.next) break;
+          page += 1;
+        }
+        setBooks(all.filter((b) => b.inventory > 0));
       } catch (err) {
         console.error("Failed to fetch books", err);
       } finally {
