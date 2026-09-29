@@ -1,7 +1,37 @@
-.venv
-.env
+# VCS / IDE
 .git
+.gitignore
+.idea
+.vscode
+
+# Python
+.venv
+venv
 __pycache__
-*.pyc
+*.py[cod]
+.pytest_cache
+.mypy_cache
 htmlcov
 .coverage
+.coverage.*
+
+# Secrets / env
+.env
+.env_sample
+
+# Frontend
+node_modules
+frontend
+
+# Docs / media / locals
+docs
+media
+README.md
+LICENSE
+
+# Docker / tooling
+Dockerfile
+docker-compose.yaml
+.dockerignore
+.pre-commit-config.yaml
+.flake8
