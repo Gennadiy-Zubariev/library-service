@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, patch
 
+import requests
 from django.test import TestCase, override_settings
 
 from notifications.telegram import send_telegram_message
@@ -24,7 +25,7 @@ class TelegramNotificationTest(TestCase):
 
     @patch("notifications.telegram.requests.post")
     def test_send_message_api_error_no_crash(self, mock_post):
-        mock_post.side_effect = Exception("Connection error")
+        mock_post.side_effect = requests.RequestException("Connection error")
         # Should not raise
         send_telegram_message("Test message")
 

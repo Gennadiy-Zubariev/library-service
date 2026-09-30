@@ -11,7 +11,7 @@ TELEGRAM_API_URL = (
 
 
 def send_telegram_message(text: str) -> None:
-    if not settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID:
+    if not (settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID):
         logger.warning("Telegram credentials not configured")
         return
 
@@ -22,7 +22,7 @@ def send_telegram_message(text: str) -> None:
     }
 
     try:
-        responce = requests.post(TELEGRAM_API_URL, json=payload, timeout=5)
-        responce.raise_for_status()
+        response = requests.post(TELEGRAM_API_URL, json=payload, timeout=5)
+        response.raise_for_status()
     except requests.RequestException as e:
         logger.error(f"Failed to send telegram notification: {e}")
