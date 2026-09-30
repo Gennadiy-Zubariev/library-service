@@ -3,6 +3,7 @@ from decimal import Decimal
 import stripe
 from django.conf import settings
 
+from notifications.tasks import send_telegram_notification
 from payments.models import Payment
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -87,3 +88,22 @@ def create_fine_session(borrowing, request):
         session_id=session.id,
         money_to_pay=fine_amount,
     )
+
+
+def mark_payment_paid(payment):
+    """Atomic PENDING -> PAID switch: only the call that actually changes
+    the status sends the notification (the success page and the webhook can
+    both fire, and Stripe may redeliver events)."""
+    switched = Payment.objects.filter(
+        pk=payment.pk, status=Payment.Status.PENDING
+    ).update(status=Payment.Status.PAID)
+    payment.status = Payment.Status.PAID
+    if switched:
+        send_telegram_notification.delay(
+            f"💰 *Payment Successful*\n"
+            f"Type: {payment.type}\n"
+            f"Amount: ${payment.money_to_pay}\n"
+            f"User: {payment.borrowing.user.email}\n"
+            f"Book: {payment.borrowing.book.title}"
+        )
+    return switched

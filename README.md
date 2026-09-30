@@ -7,7 +7,7 @@ Online management system for book borrowings — REST API built with Django REST
 - JWT authentication with custom `Authorize` header
 - Books inventory management (CRUD) with cover image upload
 - Borrowing system with automatic inventory tracking
-- Stripe payment integration (payments and fines)
+- Stripe payment integration (payments and fines) with webhook confirmation
 - Telegram notifications (new borrowings, overdue alerts)
 - Scheduled daily overdue check via Celery Beat
 - Pending payment check before new borrowing
@@ -69,6 +69,7 @@ POSTGRES_PORT=5432
 CELERY_BROKER_URL=redis://redis:6379/0
 DJANGO_SETTINGS_MODULE=config.settings.dev
 STRIPE_SECRET_KEY=sk_test_xxxxxxxxxxxxx
+STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxx
 TELEGRAM_BOT_TOKEN=your-bot-token
 TELEGRAM_CHAT_ID=your-chat-id
 ```
@@ -170,8 +171,42 @@ Borrowing list supports filtering:
 |--------|----------|-------------|--------|
 | GET | /api/payments/ | List payments | Authenticated |
 | GET | /api/payments/\<id\>/ | Payment detail | Authenticated |
-| GET | /api/payments/success/?session_id=... | Confirm payment | Authenticated |
+| GET | /api/payments/success/?session_id=... | Confirm payment (own payments only, otherwise 404) | Authenticated |
+| POST | /api/payments/webhook/ | Stripe webhook (signature-verified) | Stripe only |
 | GET | /api/payments/cancel/ | Cancel payment | Authenticated |
+
+## Stripe webhook
+
+A payment is marked PAID by two independent paths, so it is not lost if the user closes the
+tab before the redirect to the success page:
+
+1. **Success page** — `GET /api/payments/success/?session_id=...` (instant feedback for the user)
+2. **Webhook** — Stripe calls `POST /api/payments/webhook/` on the `checkout.session.completed` event
+
+Both use the same atomic `PENDING → PAID` switch, so the Telegram notification is sent only once
+even if both paths fire or Stripe redelivers the event. The webhook verifies the
+`Stripe-Signature` header with `STRIPE_WEBHOOK_SECRET` and returns `400` for an invalid or
+missing signature.
+
+### Local development
+
+The webhook needs to be reachable by Stripe, so forward events with the
+[Stripe CLI](https://docs.stripe.com/stripe-cli):
+
+```bash
+stripe login
+stripe listen --forward-to localhost:8000/api/payments/webhook/
+```
+
+The CLI prints `Ready! Your webhook signing secret is whsec_...` — put it into `.env` as
+`STRIPE_WEBHOOK_SECRET` and restart the backend (`docker compose up -d web`).
+
+### Production
+
+In the Stripe Dashboard: **Developers → Webhooks → Add endpoint**, URL
+`https://<your-domain>/api/payments/webhook/`, event `checkout.session.completed`.
+Use the endpoint's own *Signing secret* as `STRIPE_WEBHOOK_SECRET` (it differs from the
+Stripe CLI secret and from `STRIPE_SECRET_KEY`).
 
 ## Authentication
 
@@ -185,7 +220,8 @@ The API uses JWT tokens with a custom header `Authorize` (not the standard `Auth
 
 1. User creates a borrowing → book inventory decreases by 1
 2. Stripe Checkout session is created automatically → Payment (PENDING)
-3. User clicks **Pay Now** (Stripe opens in the same tab) and pays → redirected to success page → Payment becomes PAID
+3. User clicks **Pay Now** (Stripe opens in the same tab) and pays → Payment becomes PAID
+   (via the Stripe webhook, or when the user lands on the success page — whichever comes first)
 4. User returns the book → inventory increases by 1
 5. If returned late → a FINE payment is created (daily_fee × days_overdue × 2)
 
