@@ -4,6 +4,16 @@ import { getBorrowings } from "../api/services";
 import { useAuth } from "../context/AuthContext";
 import type { Borrowing } from "../types";
 
+function PaymentBadge({ payments }: { payments: Borrowing["payments"] }) {
+  if (payments.length === 0) return <span className="text-muted">—</span>;
+
+  const pending = payments.filter((p) => p.status === "PENDING");
+  if (pending.length === 0) return <span className="badge badge-green">● Paid</span>;
+
+  const due = pending.reduce((sum, p) => sum + Number(p.money_to_pay), 0);
+  return <span className="badge badge-red">● Unpaid ${due.toFixed(2)}</span>;
+}
+
 export default function BorrowingsPage() {
   const { user } = useAuth();
   const [borrowings, setBorrowings] = useState<Borrowing[]>([]);
@@ -69,6 +79,7 @@ export default function BorrowingsPage() {
                 <th className="th">Borrow Date</th>
                 <th className="th">Expected Return</th>
                 <th className="th">Status</th>
+                <th className="th">Payment</th>
                 <th className="th">Actions</th>
               </tr>
             </thead>
@@ -85,6 +96,9 @@ export default function BorrowingsPage() {
                     ) : (
                       <span className="badge badge-orange">● Active</span>
                     )}
+                  </td>
+                  <td className="td">
+                    <PaymentBadge payments={b.payments} />
                   </td>
                   <td className="td">
                     <Link to={`/borrowings/${b.id}`} className="font-semibold text-primary hover:underline dark:text-blue-400">Details</Link>
