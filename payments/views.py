@@ -22,7 +22,7 @@ class PaymentViewSet(
         if self.request.user.is_staff:
             return queryset
 
-        return queryset.filter(user=self.request.user)
+        return queryset.filter(borrowing__user=self.request.user)
 
 
 class PaymentSuccessView(APIView):
@@ -62,21 +62,20 @@ class PaymentSuccessView(APIView):
             return Response(
                 {"error": "session_id is required"}, status=status.HTTP_400_BAD_REQUEST
             )
+        try:
+            payment = Payment.objects.select_related(
+                "borrowing__user", "borrowing__book"
+            ).get(session_id=session_id, borrowing__user=request.user)
+        except Payment.DoesNotExist:
+            return Response(
+                {"error": "Payment not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         try:
             session = stripe.checkout.Session.retrieve(session_id)
         except stripe.InvalidRequestError:
             return Response(
                 {"error": "Invalid session_id"}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            payment = Payment.objects.select_related(
-                "borrowing__user", "borrowing__book"
-            ).get(session_id=session_id)
-        except Payment.DoesNotExist:
-            return Response(
-                {"error": "Payment not found"}, status=status.HTTP_404_NOT_FOUND
             )
 
         if session.payment_status == "paid":
