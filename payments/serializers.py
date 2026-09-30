@@ -12,6 +12,11 @@ class PaymentSerializer(serializers.ModelSerializer):
             "type",
             "borrowing",
             "session_url",
-            "session_id",
             "money_to_pay",
         )
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if instance.status != Payment.Status.PENDING:
+            data["session_url"] = None
+        return data
