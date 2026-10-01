@@ -23,6 +23,11 @@ class Borrowing(models.Model):
                 condition=models.Q(actual_return_date__gte=models.F("borrow_date")),
                 name="actual_return_not_before_borrow",
             ),
+            models.UniqueConstraint(
+                fields=["user", "book"],
+                condition=models.Q(actual_return_date__isnull=True),
+                name="unique_active_borrowing_per_user_book",
+            ),
         ]
         ordering = ["-borrow_date"]
 

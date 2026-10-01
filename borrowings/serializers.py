@@ -57,6 +57,13 @@ class BorrowingCreateSerializer(serializers.ModelSerializer):
                 "You cannot borrow books with pending payments. "
                 "Please complete your outstanding payments first."
             )
+
+        if Borrowing.objects.filter(
+            user=user, book=attrs["book"], actual_return_date__isnull=True
+        ).exists():
+            raise serializers.ValidationError(
+                "You already have an active borrowing of this book."
+            )
         return attrs
 
     def create(self, validated_data):
