@@ -218,6 +218,28 @@ class PaymentSuccessViewTest(TestCase):
         mock_notify.delay.assert_not_called()
 
 
+class PaymentNotificationEscapingTest(TestCase):
+    @patch("payments.stripe_helper.send_telegram_notification")
+    @patch("payments.views.stripe.checkout.Session.retrieve")
+    def test_paid_notification_escapes_user_values(self, mock_retrieve, mock_notify):
+        user = User.objects.create_user(email="john_doe@test.com", password="test12345")
+        payment = create_payment(user)
+        book = payment.borrowing.book
+        book.title = "Tom & <Jerry>"
+        book.save()
+        mock_retrieve.return_value = stripe_session(**session_fields(payment))
+        client = APIClient()
+        client.force_authenticate(user)
+
+        result = client.get(SUCCESS_URL, {"session_id": payment.session_id})
+
+        self.assertEqual(result.status_code, status.HTTP_200_OK)
+        text = mock_notify.delay.call_args.args[0]
+        self.assertIn("<b>Payment Successful</b>", text)
+        self.assertIn("Book: Tom &amp; &lt;Jerry&gt;", text)
+        self.assertIn("User: john_doe@test.com", text)
+
+
 class PaymentListTest(TestCase):
     def setUp(self):
         self.client = APIClient()

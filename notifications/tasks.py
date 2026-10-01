@@ -1,4 +1,5 @@
 from datetime import date
+from html import escape
 
 from celery import shared_task
 
@@ -23,9 +24,9 @@ def check_overdue_borrowings():
 
     for borrowing in overdue:
         send_telegram_message(
-            f"⚠️ *Overdue Borrowing*\n"
-            f"Book: {borrowing.book.title}\n"
-            f"User: {borrowing.user.email}\n"
+            f"⚠️ <b>Overdue Borrowing</b>\n"
+            f"Book: {escape(borrowing.book.title)}\n"
+            f"User: {escape(borrowing.user.email)}\n"
             f"Borrow date: {borrowing.borrow_date}\n"
             f"Expected return: {borrowing.expected_return_date}\n"
             f"Days overdue: {(date.today() - borrowing.expected_return_date).days}"

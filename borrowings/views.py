@@ -1,3 +1,5 @@
+from html import escape
+
 from django.db import transaction
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import mixins, status, viewsets
@@ -69,9 +71,9 @@ class BorrowingViewSet(
             borrowing = serializer.save(user=self.request.user)
             create_stripe_session(borrowing, self.request)
         send_telegram_notification.delay(
-            f"📚 *New Borrowing*\n"
-            f"Book: {borrowing.book.title}\n"
-            f"User: {borrowing.user.email}\n"
+            f"📚 <b>New Borrowing</b>\n"
+            f"Book: {escape(borrowing.book.title)}\n"
+            f"User: {escape(borrowing.user.email)}\n"
             f"Borrow date: {borrowing.borrow_date}\n"
             f"Expected return: {borrowing.expected_return_date}"
         )

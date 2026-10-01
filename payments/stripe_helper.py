@@ -1,4 +1,5 @@
 from decimal import Decimal
+from html import escape
 
 import stripe
 from django.conf import settings
@@ -124,11 +125,11 @@ def mark_payment_paid(payment):
     payment.status = Payment.Status.PAID
     if switched:
         send_telegram_notification.delay(
-            f"💰 *Payment Successful*\n"
+            f"💰 <b>Payment Successful</b>\n"
             f"Type: {payment.type}\n"
             f"Amount: ${payment.money_to_pay}\n"
-            f"User: {payment.borrowing.user.email}\n"
-            f"Book: {payment.borrowing.book.title}"
+            f"User: {escape(payment.borrowing.user.email)}\n"
+            f"Book: {escape(payment.borrowing.book.title)}"
         )
     return switched
 

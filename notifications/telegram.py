@@ -18,7 +18,7 @@ def send_telegram_message(text: str) -> None:
     payload = {
         "chat_id": settings.TELEGRAM_CHAT_ID,
         "text": text,
-        "parse_mode": "Markdown",
+        "parse_mode": "HTML",
     }
 
     try:

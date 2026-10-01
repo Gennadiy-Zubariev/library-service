@@ -189,6 +189,27 @@ class BorrowingCreateTest(TestCase):
         self.book.refresh_from_db()
         self.assertEqual(self.book.inventory, 1)
 
+    @patch("borrowings.views.send_telegram_notification")
+    @patch("borrowings.views.create_stripe_session")
+    def test_create_notification_escapes_user_values(self, _, mock_notify):
+        user = User.objects.create_user(email="john_doe@test.com", password="test12345")
+        self.client.force_authenticate(user=user)
+        book = sample_book(title="Tom & <Jerry>")
+
+        result = self.client.post(
+            BORROWINGS_URL,
+            {
+                "book": book.id,
+                "expected_return_date": str(date.today() + timedelta(days=7)),
+            },
+        )
+
+        self.assertEqual(result.status_code, status.HTTP_201_CREATED)
+        text = mock_notify.delay.call_args.args[0]
+        self.assertIn("<b>New Borrowing</b>", text)
+        self.assertIn("Book: Tom &amp; &lt;Jerry&gt;", text)
+        self.assertIn("User: john_doe@test.com", text)
+
 
 class BorrowingReturnTest(TestCase):
     def setUp(self):
