@@ -25,6 +25,12 @@ class Payment(models.Model):
     money_to_pay = models.DecimalField(max_digits=8, decimal_places=2)
 
     class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["borrowing", "type"],
+                name="unique_payment_per_borrowing_and_type",
+            ),
+        ]
         ordering = ["-id"]
 
     def __str__(self):

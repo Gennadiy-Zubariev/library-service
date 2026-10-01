@@ -1,7 +1,9 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import patch
 
+import stripe
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -10,6 +12,7 @@ from rest_framework.test import APIClient
 
 from books.models import Book
 from borrowings.models import Borrowing
+from payments.models import Payment
 
 User = get_user_model()
 
@@ -71,10 +74,8 @@ class BorrowingListTest(TestCase):
         self.assertEqual(len(result.data["results"]), 1)
 
     def test_filter_is_active(self):
+        sample_borrowing(self.user, self.book, actual_return_date=date.today())
         active = sample_borrowing(self.user, self.book)
-        returned = sample_borrowing(self.user, self.book)
-        returned.actual_return_date = date.today()
-        returned.save()
 
         result = self.client.get(BORROWINGS_URL, {"is_active": "true"})
         self.assertEqual(len(result.data["results"]), 1)
@@ -216,3 +217,60 @@ class BorrowingReturnTest(TestCase):
         result = self.client.post(return_url(self.borrowing.id))
         self.assertIn("book", result.data)
         self.assertEqual(result.data["book"]["title"], self.book.title)
+
+
+@patch("payments.stripe_helper.stripe.checkout.Session.create")
+class BorrowingReturnFineTest(TestCase):
+    def setUp(self):
+        self.client = APIClient(raise_request_exception=False)
+        self.user = User.objects.create_user(
+            email="user@test.com", password="test12345"
+        )
+        self.book = sample_book(inventory=3)
+        self.borrowing = sample_borrowing(
+            self.user, self.book, expected_return_date=date.today() + timedelta(days=1)
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def _return_three_days_later(self):
+        late = datetime.now() + timedelta(days=3)  # 2 days overdue
+        with patch("borrowings.serializers.timezone.now", return_value=late):
+            return self.client.post(return_url(self.borrowing.id))
+
+    def test_overdue_return_creates_fine_payment(self, mock_create):
+        mock_create.return_value = SimpleNamespace(
+            url="https://checkout.stripe.com/fine", id="cs_test_fine"
+        )
+
+        result = self._return_three_days_later()
+
+        self.assertEqual(result.status_code, status.HTTP_200_OK)
+        payment = Payment.objects.get(borrowing=self.borrowing)
+        self.assertEqual(payment.type, Payment.Type.FINE)
+
+    def test_stripe_failure_rolls_back_return(self, mock_create):
+        mock_create.side_effect = stripe.StripeError("stripe is down")
+
+        result = self._return_three_days_later()
+
+        self.assertEqual(result.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.borrowing.refresh_from_db()
+        self.assertIsNone(self.borrowing.actual_return_date)
+        self.book.refresh_from_db()
+        self.assertEqual(self.book.inventory, 3)
+        self.assertFalse(Payment.objects.exists())
+
+    def test_return_can_be_retried_after_stripe_failure(self, mock_create):
+        mock_create.side_effect = stripe.StripeError("stripe is down")
+        self._return_three_days_later()
+        mock_create.side_effect = None
+        mock_create.return_value = SimpleNamespace(
+            url="https://checkout.stripe.com/fine", id="cs_test_fine"
+        )
+
+        result = self._return_three_days_later()
+
+        self.assertEqual(result.status_code, status.HTTP_200_OK)
+        self.assertEqual(Payment.objects.filter(type=Payment.Type.FINE).count(), 1)
+        self.book.refresh_from_db()
+        self.assertEqual(self.book.inventory, 4)

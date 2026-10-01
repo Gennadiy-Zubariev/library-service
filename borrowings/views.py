@@ -92,10 +92,10 @@ class BorrowingViewSet(
         borrowing = self.get_object()
         serializer = self.get_serializer(borrowing, data={})
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-
-        if borrowing.actual_return_date > borrowing.expected_return_date:
-            create_fine_session(borrowing, request)
+        with transaction.atomic():
+            serializer.save()
+            if borrowing.actual_return_date > borrowing.expected_return_date:
+                create_fine_session(borrowing, request)
         return Response(
             BorrowingReadSerializer(borrowing).data, status=status.HTTP_200_OK
         )

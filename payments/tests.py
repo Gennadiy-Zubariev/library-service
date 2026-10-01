@@ -18,7 +18,7 @@ from rest_framework.test import APIClient
 from books.models import Book
 from borrowings.models import Borrowing
 from payments.models import Payment
-from payments.stripe_helper import create_fine_session
+from payments.stripe_helper import create_fine_session, create_stripe_session
 
 User = get_user_model()
 
@@ -95,6 +95,34 @@ class PaymentSessionIdUniqueTest(TestCase):
             )
 
         self.assertEqual(Payment.objects.filter(session_id="cs_test_dup").count(), 1)
+
+
+class PaymentUniquePerBorrowingTest(TestCase):
+    def setUp(self):
+        user = User.objects.create_user(email="uniq@test.com", password="test12345")
+        self.payment = create_payment(user, session_id="cs_test_first")
+
+    def _create(self, payment_type, session_id):
+        return Payment.objects.create(
+            borrowing=self.payment.borrowing,
+            type=payment_type,
+            session_id=session_id,
+            session_url="https://checkout.stripe.com/test2",
+            money_to_pay=Decimal("5.00"),
+        )
+
+    def test_duplicate_borrowing_and_type_raises_integrity_error(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self._create(Payment.Type.PAYMENT, "cs_test_second")
+
+        self.assertEqual(Payment.objects.count(), 1)
+
+    def test_payment_and_fine_for_same_borrowing_allowed(self):
+        self._create(Payment.Type.FINE, "cs_test_fine")
+
+        self.assertEqual(
+            Payment.objects.filter(borrowing=self.payment.borrowing).count(), 2
+        )
 
 
 class PaymentSuccessViewTest(TestCase):
@@ -406,3 +434,63 @@ class CreateFineSessionTest(TestCase):
         self.assertEqual(payment.status, Payment.Status.PENDING)
         self.assertEqual(payment.money_to_pay, Decimal("6.00"))  # 1.50 * 2 * 2
         self.assertEqual(payment.session_id, "cs_test_fine")
+
+
+@patch("payments.stripe_helper.stripe.checkout.Session.create")
+class DuplicateSessionGuardTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="guard@test.com", password="test12345"
+        )
+        self.book = Book.objects.create(
+            title="Guard Book",
+            author="Guard Author",
+            cover=Book.CoverType.HARD,
+            inventory=5,
+            daily_fee=Decimal("1.50"),
+        )
+        self.request = SimpleNamespace(
+            get_host=lambda: "testserver", is_secure=lambda: False
+        )
+        today = date.today()
+        self.borrowing = Borrowing.objects.create(
+            user=self.user,
+            book=self.book,
+            expected_return_date=today + timedelta(days=1),
+            actual_return_date=today + timedelta(days=3),
+        )
+
+    def test_second_borrowing_payment_raises_validation_error(self, mock_create):
+        mock_create.return_value = SimpleNamespace(
+            url="https://checkout.stripe.com/1", id="cs_test_1"
+        )
+        create_stripe_session(self.borrowing, self.request)
+
+        with self.assertRaises(serializers.ValidationError):
+            create_stripe_session(self.borrowing, self.request)
+
+        mock_create.assert_called_once()
+        self.assertEqual(Payment.objects.filter(type=Payment.Type.PAYMENT).count(), 1)
+
+    def test_second_fine_raises_validation_error(self, mock_create):
+        mock_create.return_value = SimpleNamespace(
+            url="https://checkout.stripe.com/2", id="cs_test_2"
+        )
+        create_fine_session(self.borrowing, self.request)
+
+        with self.assertRaises(serializers.ValidationError):
+            create_fine_session(self.borrowing, self.request)
+
+        mock_create.assert_called_once()
+        self.assertEqual(Payment.objects.filter(type=Payment.Type.FINE).count(), 1)
+
+    def test_payment_and_fine_can_coexist(self, mock_create):
+        mock_create.side_effect = [
+            SimpleNamespace(url="https://checkout.stripe.com/3", id="cs_test_3"),
+            SimpleNamespace(url="https://checkout.stripe.com/4", id="cs_test_4"),
+        ]
+
+        create_stripe_session(self.borrowing, self.request)
+        create_fine_session(self.borrowing, self.request)
+
+        self.assertEqual(Payment.objects.filter(borrowing=self.borrowing).count(), 2)

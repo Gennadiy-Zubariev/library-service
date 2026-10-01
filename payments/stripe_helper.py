@@ -26,6 +26,10 @@ def _get_frontend_url(request):
 
 
 def create_stripe_session(borrowing, request):
+    if Payment.objects.filter(borrowing=borrowing, type=Payment.Type.PAYMENT).exists():
+        raise serializers.ValidationError(
+            "A payment for this borrowing already exists."
+        )
     frontend_url = _get_frontend_url(request)
     days = (borrowing.expected_return_date - borrowing.borrow_date).days
     total_price = borrowing.book.daily_fee * days
@@ -67,6 +71,8 @@ def create_fine_session(borrowing, request):
         raise serializers.ValidationError(
             "Cannot create a fine for an active borrowing"
         )
+    if Payment.objects.filter(borrowing=borrowing, type=Payment.Type.FINE).exists():
+        raise serializers.ValidationError("A fine for this borrowing already exists.")
 
     days_overdue = (borrowing.actual_return_date - borrowing.expected_return_date).days
     if days_overdue <= 0:
