@@ -8,7 +8,7 @@ from django.test import TestCase, override_settings
 
 from books.models import Book
 from borrowings.models import Borrowing
-from notifications.tasks import check_overdue_borrowings
+from notifications.tasks import _chunk, check_overdue_borrowings
 from notifications.telegram import send_telegram_message
 
 User = get_user_model()
@@ -74,7 +74,96 @@ class OverdueNotificationTest(TestCase):
 
         mock_send.assert_called_once()
         text = mock_send.call_args.args[0]
-        self.assertIn("<b>Overdue Borrowing</b>", text)
+        self.assertIn("<b>Overdue Borrowings</b>", text)
         self.assertIn("Book: Tom &amp; &lt;Jerry&gt;", text)
         self.assertIn("User: john_doe@test.com", text)
         self.assertIn("Days overdue: 4", text)
+
+
+class ChunkTest(TestCase):
+    def test_empty_blocks_give_no_messages(self):
+        self.assertEqual(_chunk([], limit=100), [])
+
+    def test_blocks_that_fit_go_into_one_message(self):
+        self.assertEqual(_chunk(["a", "b", "c"], limit=100), ["a\n\nb\n\nc"])
+
+    def test_blocks_are_split_when_limit_exceeded(self):
+        blocks = ["A" * 40, "B" * 40, "C" * 40]
+
+        messages = _chunk(blocks, limit=100)
+
+        self.assertEqual(messages, ["A" * 40 + "\n\n" + "B" * 40, "C" * 40])
+
+    def test_no_message_exceeds_limit_and_no_block_is_lost(self):
+        blocks = [f"{i:02d}" + "x" * 30 for i in range(20)]
+
+        messages = _chunk(blocks, limit=100)
+
+        self.assertTrue(all(len(m) <= 100 for m in messages))
+        self.assertEqual("\n\n".join(messages), "\n\n".join(blocks))
+
+
+class OverdueDigestTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="digest@test.com", password="test12345"
+        )
+        patcher = patch("notifications.tasks.date")
+        mock_date = patcher.start()
+        self.addCleanup(patcher.stop)
+        mock_date.today.return_value = date.today() + timedelta(days=5)
+
+    def _overdue_borrowing(self, title):
+        book = Book.objects.create(
+            title=title,
+            author="Author",
+            cover=Book.CoverType.HARD,
+            inventory=1,
+            daily_fee=Decimal("1.50"),
+        )
+        return Borrowing.objects.create(
+            user=self.user,
+            book=book,
+            expected_return_date=date.today() + timedelta(days=1),
+        )
+
+    @patch("notifications.tasks.send_telegram_message")
+    def test_no_overdue_sends_single_info_message(self, mock_send):
+        check_overdue_borrowings()
+
+        mock_send.assert_called_once_with("No borrowings overdue today!")
+
+    @patch("notifications.tasks.send_telegram_message")
+    def test_many_overdue_borrowings_sent_in_one_message(self, mock_send):
+        titles = [f"Book {i}" for i in range(5)]
+        for title in titles:
+            self._overdue_borrowing(title)
+
+        check_overdue_borrowings()
+
+        mock_send.assert_called_once()
+        text = mock_send.call_args.args[0]
+        for title in titles:
+            self.assertIn(f"Book: {title}", text)
+
+    @patch("notifications.tasks.send_telegram_message")
+    def test_long_digest_is_split_within_telegram_limit(self, mock_send):
+        titles = [f"{i:02d}" + "x" * 250 for i in range(20)]
+        for title in titles:
+            self._overdue_borrowing(title)
+
+        check_overdue_borrowings()
+
+        self.assertGreater(mock_send.call_count, 1)
+        texts = [call.args[0] for call in mock_send.call_args_list]
+        self.assertTrue(all(len(text) <= 4096 for text in texts))
+        for title in titles:
+            self.assertEqual(sum(title in text for text in texts), 1)
+
+    @patch("notifications.tasks.send_telegram_message")
+    def test_number_of_queries_does_not_grow_with_borrowings(self, mock_send):
+        for i in range(3):
+            self._overdue_borrowing(f"Book {i}")
+
+        with self.assertNumQueries(1):
+            check_overdue_borrowings()
