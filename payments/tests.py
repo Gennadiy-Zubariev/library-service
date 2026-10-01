@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework import serializers, status
@@ -46,6 +47,23 @@ def create_payment(user, session_id="cs_test_owner"):
         session_url="https://checkout.stripe.com/test",
         money_to_pay=Decimal("10.50"),
     )
+
+
+class PaymentSessionIdUniqueTest(TestCase):
+    def test_duplicate_session_id_raises_integrity_error(self):
+        user = User.objects.create_user(email="dup@test.com", password="test12345")
+        payment = create_payment(user, session_id="cs_test_dup")
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Payment.objects.create(
+                borrowing=payment.borrowing,
+                type=Payment.Type.FINE,
+                session_id="cs_test_dup",
+                session_url="https://checkout.stripe.com/test2",
+                money_to_pay=Decimal("5.00"),
+            )
+
+        self.assertEqual(Payment.objects.filter(session_id="cs_test_dup").count(), 1)
 
 
 class PaymentSuccessViewTest(TestCase):
