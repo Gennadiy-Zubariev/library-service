@@ -40,6 +40,13 @@ class BorrowingCreateSerializer(serializers.ModelSerializer):
             )
         return book
 
+    def validate_expected_return_date(self, value):
+        if value <= timezone.now().date():
+            raise serializers.ValidationError(
+                "Expected return date must be later than today."
+            )
+        return value
+
     def validate(self, attrs):
         user = self.context["request"].user
         pending_payments = Payment.objects.filter(

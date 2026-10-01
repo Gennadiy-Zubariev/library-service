@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -153,6 +154,39 @@ class BorrowingCreateTest(TestCase):
         }
         result = self.client.post(BORROWINGS_URL, data)
         self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def _post_with_date(self, expected_return_date):
+        return self.client.post(
+            BORROWINGS_URL,
+            {"book": self.book.id, "expected_return_date": str(expected_return_date)},
+        )
+
+    def _assert_rejected(self, result):
+        self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("expected_return_date", result.data)
+        self.assertFalse(Borrowing.objects.exists())
+        self.book.refresh_from_db()
+        self.assertEqual(self.book.inventory, 2)
+
+    def test_create_past_expected_return_date_returns_400(self):
+        result = self._post_with_date(date.today() - timedelta(days=3))
+        self._assert_rejected(result)
+
+    def test_create_today_expected_return_date_returns_400(self):
+        result = self._post_with_date(date.today())
+        self._assert_rejected(result)
+
+    def test_create_invalid_date_format_returns_400(self):
+        result = self._post_with_date("2026-13-45")
+        self._assert_rejected(result)
+
+    @patch("borrowings.views.send_telegram_notification")
+    @patch("borrowings.views.create_stripe_session")
+    def test_create_tomorrow_expected_return_date_allowed(self, *_):
+        result = self._post_with_date(date.today() + timedelta(days=1))
+        self.assertEqual(result.status_code, status.HTTP_201_CREATED)
+        self.book.refresh_from_db()
+        self.assertEqual(self.book.inventory, 1)
 
 
 class BorrowingReturnTest(TestCase):
