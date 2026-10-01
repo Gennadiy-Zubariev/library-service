@@ -1,13 +1,20 @@
+import logging
+
 import stripe
+from django.conf import settings
+from django.http import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from notifications.tasks import send_telegram_notification
 from payments.models import Payment
 from payments.serializers import PaymentSerializer
+from payments.stripe_helper import mark_payment_paid, session_matches_payment
+
+logger = logging.getLogger(__name__)
 
 
 class PaymentViewSet(
@@ -22,7 +29,7 @@ class PaymentViewSet(
         if self.request.user.is_staff:
             return queryset
 
-        return queryset.filter(user=self.request.user)
+        return queryset.filter(borrowing__user=self.request.user)
 
 
 class PaymentSuccessView(APIView):
@@ -62,6 +69,14 @@ class PaymentSuccessView(APIView):
             return Response(
                 {"error": "session_id is required"}, status=status.HTTP_400_BAD_REQUEST
             )
+        try:
+            payment = Payment.objects.select_related(
+                "borrowing__user", "borrowing__book"
+            ).get(session_id=session_id, borrowing__user=request.user)
+        except Payment.DoesNotExist:
+            return Response(
+                {"error": "Payment not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
         try:
             session = stripe.checkout.Session.retrieve(session_id)
@@ -70,31 +85,13 @@ class PaymentSuccessView(APIView):
                 {"error": "Invalid session_id"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        try:
-            payment = Payment.objects.select_related(
-                "borrowing__user", "borrowing__book"
-            ).get(session_id=session_id)
-        except Payment.DoesNotExist:
-            return Response(
-                {"error": "Payment not found"}, status=status.HTTP_404_NOT_FOUND
-            )
-
         if session.payment_status == "paid":
-            # Atomic PENDING -> PAID switch: only the request that actually
-            # changes the status sends the notification (the endpoint can be
-            # hit several times, e.g. React StrictMode or a page refresh).
-            switched = Payment.objects.filter(
-                pk=payment.pk, status=Payment.Status.PENDING
-            ).update(status=Payment.Status.PAID)
-            payment.status = Payment.Status.PAID
-            if switched:
-                send_telegram_notification.delay(
-                    f"💰 *Payment Successful*\n"
-                    f"Type: {payment.type}\n"
-                    f"Amount: ${payment.money_to_pay}\n"
-                    f"User: {payment.borrowing.user.email}\n"
-                    f"Book: {payment.borrowing.book.title}"
+            if not session_matches_payment(payment, session):
+                return Response(
+                    {"error": "Payment data mismatch"},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
+            mark_payment_paid(payment)
             return Response(
                 {
                     "message": "Payment successful",
@@ -125,3 +122,37 @@ class PaymentCancelView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+@csrf_exempt
+def stripe_webhook(request):
+    if request.method != "POST":
+        return HttpResponse(status=405)
+
+    try:
+        event = stripe.Webhook.construct_event(
+            request.body,
+            request.META.get("HTTP_STRIPE_SIGNATURE", ""),
+            settings.STRIPE_WEBHOOK_SECRET,
+        )
+    except (ValueError, stripe.SignatureVerificationError):
+        return HttpResponse(status=400)
+
+    session = event["data"]["object"]
+    payments = Payment.objects.select_related(
+        "borrowing__user", "borrowing__book"
+    ).filter(session_id=session["id"])
+
+    if event["type"] == "checkout.session.completed":
+        if session["payment_status"] == "paid":
+            for payment in payments:
+                if session_matches_payment(payment, session):
+                    mark_payment_paid(payment)
+                else:
+                    logger.error(
+                        "Stripe session %s does not match payment %s",
+                        session["id"],
+                        payment.id,
+                    )
+
+    return HttpResponse(status=200)

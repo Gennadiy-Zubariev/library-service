@@ -17,7 +17,9 @@ htmlcov
 
 # Secrets / env
 .env
+.env.prod
 .env_sample
+.env.prod_sample
 
 # Frontend
 node_modules
@@ -32,6 +34,7 @@ LICENSE
 # Docker / tooling
 Dockerfile
 docker-compose.yaml
+docker-compose.prod.yaml
 .dockerignore
 .pre-commit-config.yaml
 .flake8

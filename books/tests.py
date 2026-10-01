@@ -1,6 +1,8 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -33,6 +35,33 @@ class BookModeTests(TestCase):
     def test_str(self):
         book = sample_book()
         self.assertEqual(str(book), "Test Book written by Test Author")
+
+    def test_negative_daily_fee_fails_validation(self):
+        book = Book(
+            title="T",
+            author="A",
+            cover=Book.CoverType.HARD,
+            inventory=1,
+            daily_fee=Decimal("-1.00"),
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            book.full_clean()
+        self.assertIn("daily_fee", ctx.exception.message_dict)
+
+    def test_negative_daily_fee_rejected_by_database(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            sample_book(daily_fee=Decimal("-1.00"))
+        self.assertFalse(Book.objects.exists())
+
+    def test_zero_daily_fee_rejected_by_database(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            sample_book(daily_fee=Decimal("0.00"))
+        self.assertFalse(Book.objects.exists())
+
+    def test_negative_inventory_rejected_by_database(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            sample_book(inventory=-1)
+        self.assertFalse(Book.objects.exists())
 
     def test_cover_choice(self):
         book_hard = sample_book(title="Hard Book", cover=Book.CoverType.HARD)
@@ -146,3 +175,74 @@ class BookViewTestAdmin(TestCase):
         result = self.client.delete(detail_url(book.id))
         self.assertEqual(result.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Book.objects.filter(title="For delete").exists())
+
+    def _book_data(self, daily_fee):
+        return {
+            "title": "Fee Book",
+            "author": "Fee Author",
+            "cover": Book.CoverType.HARD,
+            "inventory": 5,
+            "daily_fee": daily_fee,
+        }
+
+    def test_create_book_invalid_daily_fee_returns_400(self):
+        for fee in ("-5.00", "0.00"):
+            with self.subTest(daily_fee=fee):
+                result = self.client.post(BOOKS_URL, self._book_data(fee))
+
+                self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn("daily_fee", result.data)
+                self.assertFalse(Book.objects.filter(title="Fee Book").exists())
+
+    def test_create_book_minimum_daily_fee_allowed(self):
+        result = self.client.post(BOOKS_URL, self._book_data("0.01"))
+
+        self.assertEqual(result.status_code, status.HTTP_201_CREATED)
+        book = Book.objects.get(id=result.data["id"])
+        self.assertEqual(book.daily_fee, Decimal("0.01"))
+
+    def test_update_book_negative_daily_fee_returns_400(self):
+        result = self.client.patch(detail_url(self.book.id), {"daily_fee": "-1.00"})
+
+        self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("daily_fee", result.data)
+        self.book.refresh_from_db()
+        self.assertEqual(self.book.daily_fee, Decimal("1.50"))
+
+    def test_create_book_negative_inventory_returns_400(self):
+        data = self._book_data("1.50")
+        data["inventory"] = -1
+
+        result = self.client.post(BOOKS_URL, data)
+
+        self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("inventory", result.data)
+        self.assertFalse(Book.objects.filter(title="Fee Book").exists())
+
+    def test_create_book_zero_inventory_allowed(self):
+        data = self._book_data("1.50")
+        data["inventory"] = 0
+
+        result = self.client.post(BOOKS_URL, data)
+
+        self.assertEqual(result.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Book.objects.get(id=result.data["id"]).inventory, 0)
+
+    def test_partial_update_negative_inventory_returns_400(self):
+        result = self.client.patch(detail_url(self.book.id), {"inventory": -5})
+
+        self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("inventory", result.data)
+        self.book.refresh_from_db()
+        self.assertEqual(self.book.inventory, 5)
+
+    def test_update_book_negative_inventory_returns_400(self):
+        data = self._book_data("1.50")
+        data["inventory"] = -5
+
+        result = self.client.put(detail_url(self.book.id), data)
+
+        self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("inventory", result.data)
+        self.book.refresh_from_db()
+        self.assertEqual(self.book.inventory, 5)

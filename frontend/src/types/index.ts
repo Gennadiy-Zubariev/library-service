@@ -21,8 +21,7 @@ export interface Payment {
   status: "PENDING" | "PAID";
   type: "PAYMENT" | "FINE";
   borrowing: number;
-  session_url: string;
-  session_id: string;
+  session_url: string | null;
   money_to_pay: string;
 }
 

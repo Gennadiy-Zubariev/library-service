@@ -21,8 +21,17 @@ class Payment(models.Model):
         "borrowings.Borrowing", on_delete=models.CASCADE, related_name="payments"
     )
     session_url = models.URLField(max_length=500)
-    session_id = models.CharField(max_length=255)
+    session_id = models.CharField(max_length=255, unique=True)
     money_to_pay = models.DecimalField(max_digits=8, decimal_places=2)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["borrowing", "type"],
+                name="unique_payment_per_borrowing_and_type",
+            ),
+        ]
+        ordering = ["-id"]
 
     def __str__(self):
         return f"{self.type} - {self.status} - {self.money_to_pay}"

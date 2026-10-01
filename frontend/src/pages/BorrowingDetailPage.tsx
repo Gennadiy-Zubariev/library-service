@@ -130,7 +130,7 @@ export default function BorrowingDetailPage() {
                     </td>
                     <td className="td">
                       {p.status === "PENDING" && (
-                        <a href={p.session_url} className="btn !px-3 !py-1.5">
+                        <a href={p.session_url ?? undefined} className="btn !px-3 !py-1.5">
                           Pay Now
                         </a>
                       )}

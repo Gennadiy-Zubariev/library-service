@@ -7,7 +7,7 @@ Online management system for book borrowings — REST API built with Django REST
 - JWT authentication with custom `Authorize` header
 - Books inventory management (CRUD) with cover image upload
 - Borrowing system with automatic inventory tracking
-- Stripe payment integration (payments and fines)
+- Stripe payment integration (payments and fines) with webhook confirmation
 - Telegram notifications (new borrowings, overdue alerts)
 - Scheduled daily overdue check via Celery Beat
 - Pending payment check before new borrowing
@@ -23,6 +23,7 @@ Online management system for book borrowings — REST API built with Django REST
 - PostgreSQL
 - Redis (Celery broker)
 - Celery + Celery Beat (async tasks, scheduling)
+- Gunicorn + WhiteNoise (production server and static files)
 - Pillow (book images)
 - Stripe API (payments)
 - Telegram Bot API (notifications)
@@ -45,7 +46,10 @@ Online management system for book borrowings — REST API built with Django REST
 - Stripe account (test mode) — [dashboard.stripe.com](https://dashboard.stripe.com)
 - Telegram bot token — create via [@BotFather](https://t.me/BotFather)
 
-### Installation
+### Development mode (default)
+
+Uses `config.settings.dev` (`DEBUG=True`), Django's `runserver` with auto-reload,
+the project directory is mounted into the containers.
 
 1. Clone the repository:
 ```bash
@@ -69,11 +73,12 @@ POSTGRES_PORT=5432
 CELERY_BROKER_URL=redis://redis:6379/0
 DJANGO_SETTINGS_MODULE=config.settings.dev
 STRIPE_SECRET_KEY=sk_test_xxxxxxxxxxxxx
+STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxx
 TELEGRAM_BOT_TOKEN=your-bot-token
 TELEGRAM_CHAT_ID=your-chat-id
 ```
 
-4. Build and run backend:
+4. Build and run backend (`docker-compose.yaml`, dev settings are set explicitly there):
 ```bash
 docker compose up --build
 ```
@@ -96,6 +101,79 @@ npm run dev
 
 The API is available at `http://localhost:8000/api/`
 The frontend is available at `http://localhost:5173/`
+
+### Production mode
+
+Uses `config.settings.prod` (`DEBUG=False`, `ALLOWED_HOSTS` taken from the environment),
+Gunicorn (3 workers) instead of `runserver`, static files served by WhiteNoise, no code
+mounted into the containers. It is a separate stack: `docker-compose.prod.yaml` + `.env.prod`.
+
+1. Create `.env.prod` from the sample (it is git-ignored, never commit it):
+```bash
+cp .env.prod_sample .env.prod
+```
+
+2. Fill in `.env.prod`. The important differences from `.env`:
+```env
+DJANGO_SECRET_KEY=<long random value, not "django-insecure-...">
+DJANGO_SETTINGS_MODULE=config.settings.prod
+DJANGO_ALLOWED_HOSTS=example.com,www.example.com   # comma separated, no spaces, no http://
+DJANGO_HTTPS=False                                 # True only when served over HTTPS
+DJANGO_SERVE_MEDIA=True                            # Django serves /media/ (book covers)
+POSTGRES_PASSWORD=<strong password>
+STRIPE_SECRET_KEY=sk_live_xxxxxxxxxxxxx
+```
+`DJANGO_ALLOWED_HOSTS` and all `POSTGRES_*` variables are required: the app refuses to start
+without them. Generate a secret key with
+`python -c "import secrets; print(secrets.token_urlsafe(64))"` (avoid `$`, `#` and quotes
+in values: Docker Compose interprets them in env files).
+
+3. Stop the development stack (both use port 8000), then build and run:
+```bash
+docker compose down
+docker compose -f docker-compose.prod.yaml up --build -d
+```
+On start the `web` container applies migrations, collects static files and starts Gunicorn.
+
+4. Create an admin user (the production stack has its own database and volumes):
+```bash
+docker compose -f docker-compose.prod.yaml exec web python manage.py createsuperuser
+```
+
+Other useful commands:
+```bash
+docker compose -f docker-compose.prod.yaml logs -f web
+docker compose -f docker-compose.prod.yaml down        # stop (data is kept in volumes)
+```
+
+`DJANGO_HTTPS=True` enables HTTPS redirect, secure cookies and HSTS. Turn it on only behind a
+reverse proxy with a TLS certificate that sets `X-Forwarded-Proto` (nginx, Caddy, a cloud load
+balancer). Without HTTPS it would break login. Check the configuration with:
+```bash
+docker compose -f docker-compose.prod.yaml exec web python manage.py check --deploy
+```
+
+Uploaded media (`/media/`, book covers) is served by Django itself in production when
+`DJANGO_SERVE_MEDIA=True` (the default). It is simple but slow, fine for a demo. For real traffic
+set `DJANGO_SERVE_MEDIA=False` and serve the `media_data_prod` volume with nginx or use object
+storage such as S3. TLS termination is not covered here either: use a reverse proxy.
+
+### Choosing the mode
+
+| | Development | Production |
+|---|---|---|
+| Compose file | `docker-compose.yaml` | `docker-compose.prod.yaml` |
+| Env file | `.env` | `.env.prod` |
+| Settings | `config.settings.dev` | `config.settings.prod` |
+| Web server | `runserver` (auto-reload) | Gunicorn |
+| `DEBUG` / `ALLOWED_HOSTS` | `True` / `*` | `False` / from `DJANGO_ALLOWED_HOSTS` |
+| Static files | served by `runserver` | WhiteNoise after `collectstatic` |
+| Code | mounted from the host | baked into the image |
+| Database volume | `postgres_data` | `postgres_data_prod` (separate) |
+
+The settings module is chosen by the `DJANGO_SETTINGS_MODULE` environment variable. `manage.py`
+defaults to `dev`; `wsgi.py`, `asgi.py` and `celery.py` default to `prod`, so a server started
+without the variable never runs with `DEBUG=True`.
 
 ## Seeding the database
 
@@ -123,7 +201,8 @@ The list of books and their file names is the `BOOKS` array in
 ## Media files
 
 Uploaded book images are stored in `media/` (`MEDIA_URL=/media/`, served by Django when
-`DEBUG=True`). The Vite dev server proxies both `/api` and `/media` to the backend.
+`DEBUG=True`; in production by `DJANGO_SERVE_MEDIA=True`, see
+[Production mode](#production-mode)). The Vite dev server proxies both `/api` and `/media` to the backend.
 Admins can upload an image on the Add Book / Edit Book pages (multipart form data).
 
 ## API Endpoints
@@ -170,8 +249,42 @@ Borrowing list supports filtering:
 |--------|----------|-------------|--------|
 | GET | /api/payments/ | List payments | Authenticated |
 | GET | /api/payments/\<id\>/ | Payment detail | Authenticated |
-| GET | /api/payments/success/?session_id=... | Confirm payment | Authenticated |
+| GET | /api/payments/success/?session_id=... | Confirm payment (own payments only, otherwise 404) | Authenticated |
+| POST | /api/payments/webhook/ | Stripe webhook (signature-verified) | Stripe only |
 | GET | /api/payments/cancel/ | Cancel payment | Authenticated |
+
+## Stripe webhook
+
+A payment is marked PAID by two independent paths, so it is not lost if the user closes the
+tab before the redirect to the success page:
+
+1. **Success page** — `GET /api/payments/success/?session_id=...` (instant feedback for the user)
+2. **Webhook** — Stripe calls `POST /api/payments/webhook/` on the `checkout.session.completed` event
+
+Both use the same atomic `PENDING → PAID` switch, so the Telegram notification is sent only once
+even if both paths fire or Stripe redelivers the event. The webhook verifies the
+`Stripe-Signature` header with `STRIPE_WEBHOOK_SECRET` and returns `400` for an invalid or
+missing signature.
+
+### Local development
+
+The webhook needs to be reachable by Stripe, so forward events with the
+[Stripe CLI](https://docs.stripe.com/stripe-cli):
+
+```bash
+stripe login
+stripe listen --forward-to localhost:8000/api/payments/webhook/
+```
+
+The CLI prints `Ready! Your webhook signing secret is whsec_...` — put it into `.env` as
+`STRIPE_WEBHOOK_SECRET` and restart the backend (`docker compose up -d web`).
+
+### Production
+
+In the Stripe Dashboard: **Developers → Webhooks → Add endpoint**, URL
+`https://<your-domain>/api/payments/webhook/`, event `checkout.session.completed`.
+Use the endpoint's own *Signing secret* as `STRIPE_WEBHOOK_SECRET` (it differs from the
+Stripe CLI secret and from `STRIPE_SECRET_KEY`).
 
 ## Authentication
 
@@ -185,7 +298,8 @@ The API uses JWT tokens with a custom header `Authorize` (not the standard `Auth
 
 1. User creates a borrowing → book inventory decreases by 1
 2. Stripe Checkout session is created automatically → Payment (PENDING)
-3. User clicks **Pay Now** (Stripe opens in the same tab) and pays → redirected to success page → Payment becomes PAID
+3. User clicks **Pay Now** (Stripe opens in the same tab) and pays → Payment becomes PAID
+   (via the Stripe webhook, or when the user lands on the success page — whichever comes first)
 4. User returns the book → inventory increases by 1
 5. If returned late → a FINE payment is created (daily_fee × days_overdue × 2)
 
@@ -296,7 +410,7 @@ Redis — message broker
 
 | Service | Description |
 |---------|-------------|
-| web | Django application |
+| web | Django application (`runserver` in dev, Gunicorn in prod) |
 | db | PostgreSQL 16 |
 | redis | Redis 7 (Celery broker) |
 | celery_worker | Executes async tasks |
