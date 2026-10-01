@@ -1,3 +1,5 @@
+import logging
+
 import stripe
 from django.conf import settings
 from django.http import HttpResponse
@@ -10,7 +12,9 @@ from rest_framework.views import APIView
 
 from payments.models import Payment
 from payments.serializers import PaymentSerializer
-from payments.stripe_helper import mark_payment_paid
+from payments.stripe_helper import mark_payment_paid, session_matches_payment
+
+logger = logging.getLogger(__name__)
 
 
 class PaymentViewSet(
@@ -82,6 +86,11 @@ class PaymentSuccessView(APIView):
             )
 
         if session.payment_status == "paid":
+            if not session_matches_payment(payment, session):
+                return Response(
+                    {"error": "Payment data mismatch"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             mark_payment_paid(payment)
             return Response(
                 {
@@ -137,6 +146,13 @@ def stripe_webhook(request):
     if event["type"] == "checkout.session.completed":
         if session["payment_status"] == "paid":
             for payment in payments:
-                mark_payment_paid(payment)
+                if session_matches_payment(payment, session):
+                    mark_payment_paid(payment)
+                else:
+                    logger.error(
+                        "Stripe session %s does not match payment %s",
+                        session["id"],
+                        payment.id,
+                    )
 
     return HttpResponse(status=200)

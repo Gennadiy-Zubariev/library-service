@@ -7,6 +7,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import stripe
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
@@ -47,6 +48,36 @@ def create_payment(user, session_id="cs_test_owner"):
         session_url="https://checkout.stripe.com/test",
         money_to_pay=Decimal("10.50"),
     )
+
+
+def stripe_session(payment_status="paid", **fields):
+    """A real stripe Session object, same type that Session.retrieve returns."""
+    return stripe.checkout.Session.construct_from(
+        {"id": "cs_test", "payment_status": payment_status, **fields}, "sk_test"
+    )
+
+
+def session_fields(payment, **overrides):
+    """Stripe session fields that match the given payment."""
+    fields = {
+        "amount_total": int(payment.money_to_pay * 100),
+        "currency": "usd",
+        "metadata": {
+            "borrowing_id": str(payment.borrowing_id),
+            "type": payment.type,
+        },
+    }
+    fields.update(overrides)
+    return fields
+
+
+MISMATCHES = {
+    "amount": {"amount_total": 100},
+    "currency": {"currency": "eur"},
+    "borrowing": {"metadata": {"borrowing_id": "999999", "type": "PAYMENT"}},
+    "type": {"metadata": {"borrowing_id": "1", "type": "FINE"}},
+    "no_metadata": {"metadata": {}},
+}
 
 
 class PaymentSessionIdUniqueTest(TestCase):
@@ -103,7 +134,7 @@ class PaymentSuccessViewTest(TestCase):
     @patch("payments.stripe_helper.send_telegram_notification")
     @patch("payments.views.stripe.checkout.Session.retrieve")
     def test_owner_marks_payment_paid(self, mock_retrieve, mock_notify):
-        mock_retrieve.return_value = SimpleNamespace(payment_status="paid")
+        mock_retrieve.return_value = stripe_session(**session_fields(self.payment))
         self.client.force_authenticate(self.owner)
 
         result = self.client.get(SUCCESS_URL, {"session_id": self.payment.session_id})
@@ -116,13 +147,34 @@ class PaymentSuccessViewTest(TestCase):
     @patch("payments.stripe_helper.send_telegram_notification")
     @patch("payments.views.stripe.checkout.Session.retrieve")
     def test_repeated_call_sends_notification_once(self, mock_retrieve, mock_notify):
-        mock_retrieve.return_value = SimpleNamespace(payment_status="paid")
+        mock_retrieve.return_value = stripe_session(**session_fields(self.payment))
         self.client.force_authenticate(self.owner)
 
         self.client.get(SUCCESS_URL, {"session_id": self.payment.session_id})
         self.client.get(SUCCESS_URL, {"session_id": self.payment.session_id})
 
         mock_notify.delay.assert_called_once()
+
+    @patch("payments.stripe_helper.send_telegram_notification")
+    @patch("payments.views.stripe.checkout.Session.retrieve")
+    def test_session_mismatch_returns_400_and_keeps_pending(
+        self, mock_retrieve, mock_notify
+    ):
+        self.client.force_authenticate(self.owner)
+        for name, overrides in MISMATCHES.items():
+            with self.subTest(mismatch=name):
+                mock_retrieve.return_value = stripe_session(
+                    **session_fields(self.payment, **overrides)
+                )
+
+                result = self.client.get(
+                    SUCCESS_URL, {"session_id": self.payment.session_id}
+                )
+
+                self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST)
+                self.payment.refresh_from_db()
+                self.assertEqual(self.payment.status, Payment.Status.PENDING)
+                mock_notify.delay.assert_not_called()
 
     @patch("payments.stripe_helper.send_telegram_notification")
     @patch("payments.views.stripe.checkout.Session.retrieve")
@@ -185,7 +237,7 @@ def signed_webhook_post(client, event, secret=WEBHOOK_SECRET):
     )
 
 
-def session_event(event_type, session_id, payment_status="paid"):
+def session_event(event_type, session_id, payment_status="paid", **fields):
     return {
         "id": "evt_test",
         "object": "event",
@@ -195,6 +247,7 @@ def session_event(event_type, session_id, payment_status="paid"):
                 "id": session_id,
                 "object": "checkout.session",
                 "payment_status": payment_status,
+                **fields,
             }
         },
     }
@@ -231,7 +284,11 @@ class StripeWebhookTest(TestCase):
 
     @patch("payments.stripe_helper.send_telegram_notification")
     def test_completed_event_marks_payment_paid(self, mock_notify):
-        event = session_event("checkout.session.completed", self.payment.session_id)
+        event = session_event(
+            "checkout.session.completed",
+            self.payment.session_id,
+            **session_fields(self.payment),
+        )
 
         result = signed_webhook_post(self.client, event)
 
@@ -242,12 +299,34 @@ class StripeWebhookTest(TestCase):
 
     @patch("payments.stripe_helper.send_telegram_notification")
     def test_redelivered_event_sends_notification_once(self, mock_notify):
-        event = session_event("checkout.session.completed", self.payment.session_id)
+        event = session_event(
+            "checkout.session.completed",
+            self.payment.session_id,
+            **session_fields(self.payment),
+        )
 
         signed_webhook_post(self.client, event)
         signed_webhook_post(self.client, event)
 
         mock_notify.delay.assert_called_once()
+
+    @patch("payments.stripe_helper.send_telegram_notification")
+    def test_session_mismatch_keeps_pending_and_logs_error(self, mock_notify):
+        for name, overrides in MISMATCHES.items():
+            with self.subTest(mismatch=name):
+                event = session_event(
+                    "checkout.session.completed",
+                    self.payment.session_id,
+                    **session_fields(self.payment, **overrides),
+                )
+
+                with self.assertLogs("payments.views", level="ERROR"):
+                    result = signed_webhook_post(self.client, event)
+
+                self.assertEqual(result.status_code, status.HTTP_200_OK)
+                self.payment.refresh_from_db()
+                self.assertEqual(self.payment.status, Payment.Status.PENDING)
+                mock_notify.delay.assert_not_called()
 
     @patch("payments.stripe_helper.send_telegram_notification")
     def test_unpaid_completed_event_keeps_pending(self, mock_notify):

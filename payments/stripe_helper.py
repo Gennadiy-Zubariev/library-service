@@ -12,6 +12,10 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 FINE_MULTIPLIER = Decimal("2")
 
 
+def to_cents(amount):
+    return int(amount * 100)
+
+
 def _get_frontend_url(request):
     """In dev frontend runs on port 5173, in prod same origin."""
     host = request.get_host()
@@ -25,7 +29,7 @@ def create_stripe_session(borrowing, request):
     frontend_url = _get_frontend_url(request)
     days = (borrowing.expected_return_date - borrowing.borrow_date).days
     total_price = borrowing.book.daily_fee * days
-    amount_in_cents = int(total_price * 100)
+    amount_in_cents = to_cents(total_price)
 
     session = stripe.checkout.Session.create(
         payment_method_types=["card"],
@@ -42,6 +46,7 @@ def create_stripe_session(borrowing, request):
             }
         ],
         mode="payment",
+        metadata={"borrowing_id": str(borrowing.id), "type": Payment.Type.PAYMENT},
         success_url=frontend_url + "/payments/success?session_id={CHECKOUT_SESSION_ID}",
         cancel_url=frontend_url + "/payments/cancel",
     )
@@ -71,7 +76,7 @@ def create_fine_session(borrowing, request):
 
     frontend_url = _get_frontend_url(request)
     fine_amount = borrowing.book.daily_fee * days_overdue * FINE_MULTIPLIER
-    amount_in_cents = int(fine_amount * 100)
+    amount_in_cents = to_cents(fine_amount)
 
     session = stripe.checkout.Session.create(
         payment_method_types=["card"],
@@ -88,6 +93,7 @@ def create_fine_session(borrowing, request):
             }
         ],
         mode="payment",
+        metadata={"borrowing_id": str(borrowing.id), "type": Payment.Type.FINE},
         success_url=frontend_url + "/payments/success?session_id={CHECKOUT_SESSION_ID}",
         cancel_url=frontend_url + "/payments/cancel",
     )
@@ -119,3 +125,13 @@ def mark_payment_paid(payment):
             f"Book: {payment.borrowing.book.title}"
         )
     return switched
+
+
+def session_matches_payment(payment, session):
+    metadata = session["metadata"]
+    expected = {"borrowing_id": str(payment.borrowing_id), "type": payment.type}
+    return (
+        session["amount_total"] == to_cents(payment.money_to_pay)
+        and session["currency"] == "usd"
+        and all(k in metadata and metadata[k] == v for k, v in expected.items())
+    )
