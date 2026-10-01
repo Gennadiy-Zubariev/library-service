@@ -2,6 +2,7 @@ from decimal import Decimal
 
 import stripe
 from django.conf import settings
+from rest_framework import serializers
 
 from notifications.tasks import send_telegram_notification
 from payments.models import Payment
@@ -56,8 +57,19 @@ def create_stripe_session(borrowing, request):
 
 
 def create_fine_session(borrowing, request):
-    frontend_url = _get_frontend_url(request)
+
+    if borrowing.actual_return_date is None:
+        raise serializers.ValidationError(
+            "Cannot create a fine for an active borrowing"
+        )
+
     days_overdue = (borrowing.actual_return_date - borrowing.expected_return_date).days
+    if days_overdue <= 0:
+        raise serializers.ValidationError(
+            "Borrowing was returned on time, no fine is due."
+        )
+
+    frontend_url = _get_frontend_url(request)
     fine_amount = borrowing.book.daily_fee * days_overdue * FINE_MULTIPLIER
     amount_in_cents = int(fine_amount * 100)
 
