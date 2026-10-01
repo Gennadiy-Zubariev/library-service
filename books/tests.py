@@ -58,6 +58,11 @@ class BookModeTests(TestCase):
             sample_book(daily_fee=Decimal("0.00"))
         self.assertFalse(Book.objects.exists())
 
+    def test_negative_inventory_rejected_by_database(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            sample_book(inventory=-1)
+        self.assertFalse(Book.objects.exists())
+
     def test_cover_choice(self):
         book_hard = sample_book(title="Hard Book", cover=Book.CoverType.HARD)
         book_soft = sample_book(title="Soft Book", cover=Book.CoverType.SOFT)
@@ -203,3 +208,41 @@ class BookViewTestAdmin(TestCase):
         self.assertIn("daily_fee", result.data)
         self.book.refresh_from_db()
         self.assertEqual(self.book.daily_fee, Decimal("1.50"))
+
+    def test_create_book_negative_inventory_returns_400(self):
+        data = self._book_data("1.50")
+        data["inventory"] = -1
+
+        result = self.client.post(BOOKS_URL, data)
+
+        self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("inventory", result.data)
+        self.assertFalse(Book.objects.filter(title="Fee Book").exists())
+
+    def test_create_book_zero_inventory_allowed(self):
+        data = self._book_data("1.50")
+        data["inventory"] = 0
+
+        result = self.client.post(BOOKS_URL, data)
+
+        self.assertEqual(result.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Book.objects.get(id=result.data["id"]).inventory, 0)
+
+    def test_partial_update_negative_inventory_returns_400(self):
+        result = self.client.patch(detail_url(self.book.id), {"inventory": -5})
+
+        self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("inventory", result.data)
+        self.book.refresh_from_db()
+        self.assertEqual(self.book.inventory, 5)
+
+    def test_update_book_negative_inventory_returns_400(self):
+        data = self._book_data("1.50")
+        data["inventory"] = -5
+
+        result = self.client.put(detail_url(self.book.id), data)
+
+        self.assertEqual(result.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("inventory", result.data)
+        self.book.refresh_from_db()
+        self.assertEqual(self.book.inventory, 5)
