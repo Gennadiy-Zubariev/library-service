@@ -10,12 +10,13 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.test import APIClient
 
 from books.models import Book
 from borrowings.models import Borrowing
 from payments.models import Payment
+from payments.stripe_helper import create_fine_session
 
 User = get_user_model()
 
@@ -247,3 +248,64 @@ class StripeWebhookTest(TestCase):
         event = session_event("checkout.session.completed", "cs_test_unknown")
         result = signed_webhook_post(self.client, event)
         self.assertEqual(result.status_code, status.HTTP_200_OK)
+
+
+@patch("payments.stripe_helper.stripe.checkout.Session.create")
+class CreateFineSessionTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="fine@test.com", password="test12345"
+        )
+        self.book = Book.objects.create(
+            title="Fine Book",
+            author="Fine Author",
+            cover=Book.CoverType.HARD,
+            inventory=5,
+            daily_fee=Decimal("1.50"),
+        )
+        self.request = SimpleNamespace(
+            get_host=lambda: "testserver", is_secure=lambda: False
+        )
+
+    def _borrowing(self, actual_offset=None):
+        today = date.today()
+        return Borrowing.objects.create(
+            user=self.user,
+            book=self.book,
+            expected_return_date=today + timedelta(days=1),
+            actual_return_date=(
+                None if actual_offset is None else today + timedelta(days=actual_offset)
+            ),
+        )
+
+    def test_active_borrowing_raises_validation_error(self, mock_create):
+        borrowing = self._borrowing()
+
+        with self.assertRaises(serializers.ValidationError):
+            create_fine_session(borrowing, self.request)
+
+        mock_create.assert_not_called()
+        self.assertFalse(Payment.objects.exists())
+
+    def test_returned_on_time_raises_validation_error(self, mock_create):
+        borrowing = self._borrowing(actual_offset=1)
+
+        with self.assertRaises(serializers.ValidationError):
+            create_fine_session(borrowing, self.request)
+
+        mock_create.assert_not_called()
+        self.assertFalse(Payment.objects.exists())
+
+    def test_overdue_creates_fine_payment(self, mock_create):
+        mock_create.return_value = SimpleNamespace(
+            url="https://checkout.stripe.com/fine", id="cs_test_fine"
+        )
+        borrowing = self._borrowing(actual_offset=3)  # 2 days overdue
+
+        create_fine_session(borrowing, self.request)
+
+        payment = Payment.objects.get()
+        self.assertEqual(payment.type, Payment.Type.FINE)
+        self.assertEqual(payment.status, Payment.Status.PENDING)
+        self.assertEqual(payment.money_to_pay, Decimal("6.00"))  # 1.50 * 2 * 2
+        self.assertEqual(payment.session_id, "cs_test_fine")
